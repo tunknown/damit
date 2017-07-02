@@ -557,7 +557,7 @@ Format(FileName)	файл, для списка использовать Sequence
 */
 --массив для цикла цикла-damit.Condition- одна или несколько damit.Variable.Value с одинаковым Alias и неповторяющимся Sequence is not null
 (	Id			damit.TGUID		not null
-	,Execution		damit.TGUID		/*not */null	-- область видимости переменной, null=например, для глобальных счётчиков
+	,ExecutionLog		damit.TGUID		/*not */null	-- область видимости переменной, null=например, для глобальных счётчиков
 	,Alias			damit.TName		not null	-- название переменной, через которую можно передавать значения между Task
 	,Value			sql_variant		null		-- содержимое, например, название таблицы/view с содержимым параметра- формат этого поля должны знать сами заинтересованные в параметре шаги
 	,Sequence		damit.TIntegerNeg	null		-- заполняется, если с одним названием несколько переменных; null=этот Alias должен упоминаться только один раз, т.е. не должен присутствовать с Sequence<>null
@@ -566,10 +566,10 @@ Format(FileName)	файл, для списка использовать Sequence
 	,IsCurrent		damit.TBool		null		-- для выбора текущего значения 'ForEach' переменной из нескольких записей, если она относится к циклу
 	,UQorNull		as	isnull ( convert ( binary ( 16 ),	nullif ( IsCurrent,	0 ) ),	convert ( binary ( 16 ),	Id ) )	persisted	not null	-- учитывать тип Id
 ,constraint	PKdamitVariable			primary	key	nonclustered	( Id )
-,constraint	FKdamitVariableExecution	foreign	key	( Execution )	references	damit.ExecutionLog	( Id )
-,constraint	UQdamitVariable			unique	( Execution,	Alias,	Sequence )
+,constraint	FKdamitVariableExecutionLog	foreign	key	( ExecutionLog )	references	damit.ExecutionLog	( Id )
+,constraint	UQdamitVariable			unique	( ExecutionLog,	Alias,	Sequence )
 --,constraint	DFdamitVariable			default	getdate()	for	Moment	-- на 2008R2 синаксис не поддерживается
-,constraint	UQdamitVariable1		unique	( Execution,	Alias,	UQorNull )	)
+,constraint	UQdamitVariable1		unique	( ExecutionLog,	Alias,	UQorNull )	)
 --,constraint	CKdamitVariable			check	( Value	is	null	or	ValueBLOB	is	not	null )	-- только через триггер?
 ----------
 CREATE	clustered	index	IXdamitVariable01	on	damit.Variable	( Moment )
