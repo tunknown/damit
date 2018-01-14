@@ -11,10 +11,10 @@ select
 	SchemaId=	o.uid,
 	ColumnId=	c.colid,										--/не гарантирует последовательность
 	Sequence=	row_number()	over	( partition	by	o.Id	order	by	c.colid ),	--\гарантирует последовательность
-	IsLast=		case	row_number()	over	( partition	by	o.Id	order	by	c.colid	desc )
-				when	1	then	1
-				else			0
-			end,
+	IsFirstLast=	case	
+				when	row_number()	over	( partition	by	o.Id	order	by	c.colid )=	1	then	1
+				when	row_number()	over	( partition	by	o.Id	order	by	c.colid	desc )=	1	then	0
+			end,											-- else null
 	TypeId=		t1.xusertype,
 	ObjectType=	o.xtype,
 	ObjectAlias=	convert ( nvarchar ( 257 ),	schema_name ( o.uid )+	'.'+	o.name ),
@@ -64,7 +64,7 @@ from
 		c.id=		o.id
 	inner	join	systypes	t1	on			-- сработает ли inner для select Col_With_UserType into #temp?
 		t1.xusertype=	c.xusertype
-	left	join	systypes	t2	on			-- left для поддержки hierarchyid xtype=240
+	left	join	systypes	t2	on			-- left для поддержки hierarchyid чензу=240
 		t2.xtype=	t1.xtype
 	and	t2.xtype=	t2.xusertype
 	left	join	( select
