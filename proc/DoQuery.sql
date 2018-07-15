@@ -4,7 +4,7 @@ if	object_id ( 'damit.DoQuery' , 'p' )	is	null
 	exec	( 'create	proc	damit.DoQuery	as	select	ObjectNotCreated=	1/0' )
 go
 alter	proc	damit.DoQuery
-	@gExecutionLog		TGUID
+	@iExecutionLog		TId
 as
 declare	@sMessage		TMessage
 	,@iError		TInteger=	0
@@ -17,8 +17,8 @@ declare	@sMessage		TMessage
 
 	,@oValue		sql_variant
 
-	,@gExecution		TGUID
-	,@gExecutionLogData	TGUID
+	,@iExecution		TId
+	,@iExecutionLogData	TId
 
 	,@sQuery		TSystemName
 
@@ -42,14 +42,14 @@ declare	@sMessage		TMessage
 	,@iSequence		tinyint
 ----------
 select
-	@gExecution=	dl.Execution
+	@iExecution=	dl.Execution
 	,@sTargetProc=	f.Alias
 from
 	damit.ExecutionLog	dl
 	,damit.Distribution	d
 	,damit.Query		f
 where
-		dl.Id=	@gExecutionLog
+		dl.Id=	@iExecutionLog
 	and	d.Id=	dl.Distribution
 	and	f.Id=	d.Task
 if	@@error<>	0	or	@@rowcount<>	1
@@ -163,7 +163,7 @@ begin
 		select
 			@oParamValue=	Value0
 		from
-			damit.GetVariables ( @gExecutionLog,	@sExec1,	default,	default,	default,	default,	default,	default,	default,	default,	default )
+			damit.GetVariables ( @iExecutionLog,	@sExec1,	default,	default,	default,	default,	default,	default,	default,	default,	default )
 		if	1<	@@RowCount
 		begin
 			select	@sMessage=	'Найдено более одного значения для параметра '+	@sExec1+	' процедуры '+	@sTargetProc
@@ -187,7 +187,7 @@ begin
 						end
 					+	case
 							when	@bIsOutParam=	1		then	''
-							when	@sExec1	like	'%Execution%'	then	''''+	convert ( varchar ( 36 ),	@gExecutionLog )+	''''
+							when	@sExec1	like	'%Execution%'	then	''''+	convert ( varchar ( 36 ),	@iExecutionLog )+	''''
 							when	@sParamValue	is	null	then	'null'									-- неизвестно, это значение или отсутствие значения; нельзя опускать передачу null, т.к. default может быть другой
 							when	@bIsDate=	1		then	''''+	convert ( varchar ( 23 ),	@oParamValue,	121 )+	''''
 							else						''''+	@sParamValue+	''''						-- считаем, что из текстового значения автосконвертируется в тип параметра
@@ -209,8 +209,8 @@ begin
 							when	1	then		'
 ----------
 exec	damit.SetupVariable
-		@gExecutionLog=	'''
-										+	convert ( varchar ( 36 ),	@gExecutionLog )
+		@iExecutionLog=	'''
+										+	convert ( varchar ( 36 ),	@iExecutionLog )
 										+	'''
 		,@sAlias=	'''
 										+	@sExec1
@@ -231,11 +231,14 @@ exec	damit.SetupVariable
 	deallocate	c
 end
 ----------
-set	@sExec=		'declare'
+set	@sExec=		case	@sDeclareParams
+				when	''	then	''
+				else			'declare'
 		+	@sDeclareParams
 		+	'
 ----------
 '
+			end
 		+	'exec	'
 		+	@sTargetProc
 		+	@sProcParams+	'

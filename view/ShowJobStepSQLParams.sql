@@ -8,12 +8,12 @@ with	cte	as
 (	select
 		job_id
 		,step_id
-		,command=	substring ( command , charindex ( '@' , command , patindex ( '%damit.DoTransfer%' , command ) ) , len ( command ) )
+		,command=	substring ( command , charindex ( '@' , command , patindex ( '%damit.Do[^A-Z]%' , command ) ) , len ( command ) )
 		,commandFull=	command
 	from
 		msdb.dbo.sysjobsteps
 	where
-		command	like	'%damit.DoTransfer%' )
+		command	like	'%damit.Do[^A-Z]%' )
 ,	cte1	as
 (	select
 		job_id

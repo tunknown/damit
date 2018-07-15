@@ -15,7 +15,7 @@ if	object_id ( 'damit.DoSendMail' , 'p' )	is	null
 	exec	( 'create	proc	damit.DoSendMail	as	select	ObjectNotCreated=	1/0' )
 go
 alter	proc	damit.DoSendMail
-	@gProtocol	TGUID
+	@iProtocol	TId
 	,@sFileName	nvarchar ( 4000 )	--разделитель=|, соблюдать совместимость с damit.DoSendMailInternal
 as
 --http://msdn.microsoft.com/library/default.asp?url=/library/en-us/cdosys/html/_cdosys_messaging.asp
@@ -61,7 +61,7 @@ from
 	damit.Email	e
 	,damit.SMTP	s
 where
-		e.Id=	@gProtocol
+		e.Id=	@iProtocol
 	and	s.Id=	e.SMTP
 ----------
 if		@bCanBlank=	1

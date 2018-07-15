@@ -4,7 +4,7 @@ if	object_id ( 'damit.DoSaveToExcel' , 'p' )	is	null
 	exec	( 'create	proc	damit.DoSaveToExcel	as	select	ObjectNotCreated=	1/0' )
 go
 alter	proc	damit.DoSaveToExcel	-- выгрузка данных с сервера
-	@gExecutionLog		uniqueidentifier
+	@iExecutionLog		TId
 	,@sQueryHeader		nvarchar ( max )
 	,@sQueryData		nvarchar ( max )
 	,@sFileName		nvarchar ( 256 )	output
@@ -32,10 +32,10 @@ declare	@sMessage		varchar ( 256 )
 	,@sFilterList		varchar ( max )
 	,@sFieldsSort		varchar ( max )
 
-	,@gExecutionLogData	uniqueidentifier
-	,@gExecution		uniqueidentifier
-	,@gDistribution		uniqueidentifier
-	,@gData			uniqueidentifier
+	,@iExecutionLogData	TId
+	,@iExecution		TId
+	,@iDistribution		TId
+	,@iData			TId
 	,@sDelimeter		varchar ( 36 )
 	,@sDelimeter2		varchar ( 36 )
 	,@sSheetName		varchar ( 32 )
@@ -50,12 +50,12 @@ end
 set	@sDelimeter=	','
 ----------
 select
-	@gExecution=	dl.Execution
-	,@gDistribution=dl.Distribution
+	@iExecution=	dl.Execution
+	,@iDistribution=dl.Distribution
 from
 	damit.ExecutionLog	dl
 where
-	dl.Id=		@gExecutionLog
+	dl.Id=		@iExecutionLog
 if	@@rowcount<>	1
 begin
 	select	@sMessage=	'Ошибка передачи параметров',
@@ -65,14 +65,14 @@ end
 ----------
 select
 	@sFileName=		f.FileName
-	,@sExecBefore=		c.Put
+	,@sExecBefore=		c.Command
 from
 	damit.Distribution	i
 	,damit.Format		f
 	,damit.Storage		s
 	,damit.Script		c
 where
-		i.Id=		@gDistribution
+		i.Id=		@iDistribution
 	and	f.Id=		i.Task
 	and	s.Id=		f.Storage
 	and	c.Id=		s.Script
@@ -84,10 +84,10 @@ begin
 end
 ----------
 select
-	@gExecutionLogData=	convert ( uniqueidentifier,	Value0 )
+	@iExecutionLogData=	convert ( bigint,		Value0 )
 	,@sFilterList=		convert ( varchar ( max ),	Value1 )
 from
-	damit.GetVariables ( @gExecutionLog,	'Data:ExecutionLog',	'FilterList',	default,	default,	default,	default,	default,	default,	default,	default )
+	damit.GetVariables ( @iExecutionLog,	'Data:ExecutionLog',	'FilterList',	default,	default,	default,	default,	default,	default,	default,	default )
 if	@@RowCount>	1
 begin
 	select	@sMessage=	'Ошибочно заданы параметры выгрузки',
@@ -96,13 +96,13 @@ begin
 end
 ----------
 select
-	@gData=		da.Id
+	@iData=		da.Id
 from
 	damit.ExecutionLog	el
 	,damit.Distribution	d
 	,damit.Data		da
 where
-		el.Id=		@gExecutionLogData
+		el.Id=		@iExecutionLogData
 	and	d.Id=		el.Distribution
 	and	da.Id=		d.Task
 if	@@rowcount<>	1
@@ -125,7 +125,7 @@ select
 from
 	damit.ExecutionLog
 where
-	Id=		@gExecution
+	Id=		@iExecution
 ----------
 SET	@sDelimeter2=	'
 	,'			-- нельзя объединять со следующим select, т.к. он считает, что @sDelimeter2=null, т.е. ещё не присвоен
@@ -135,7 +135,7 @@ SELECT	@sHeader=	STUFF ( ( SELECT
 				FROM
 					damit.DataField
 				where
-						Data=		@gData
+						Data=		@iData
 					and	IsResultset=	1
 				order	by
 					Sequence
@@ -147,7 +147,7 @@ SELECT	@sHeader=	STUFF ( ( SELECT
 				FROM
 					damit.DataField
 				where
-						Data=		@gData
+						Data=		@iData
 					and	IsResultset=	1
 				order	by
 					Sequence
@@ -160,7 +160,7 @@ SELECT	@sHeader=	STUFF ( ( SELECT
 				FROM
 					damit.DataField
 				where
-						Data=		@gData
+						Data=		@iData
 					and	IsResultset=	1
 				order	by
 					Sequence
@@ -175,7 +175,7 @@ SELECT	@sHeader=	STUFF ( ( SELECT
 				FROM
 					damit.DataField
 				where
-						Data=	@gData
+						Data=	@iData
 					and	Sort	is	not	null
 				order	by
 					abs ( Sequence )
@@ -193,7 +193,7 @@ select
 from
 	'+	DataLog+	'
 where
-	ExecutionLog=		'''+	convert ( varchar ( 36 ) , @gExecutionLogData )+	''''+	isnull ( '
+	ExecutionLog=		'''+	convert ( varchar ( 36 ) , @iExecutionLogData )+	''''+	isnull ( '
 order	by
 	'+	@sFieldsSort , '' )
 	,@sExecFinal=	'
@@ -211,10 +211,10 @@ from
 	FROM
 		damit.DataField
 	where
-			Data=		@gData
+			Data=		@iData
 		and	IsResultset=	1 )	t
 where
-		d.Id=		@gData
+		d.Id=		@iData
 	and	t.Sequence2=	1
 ----------
 select

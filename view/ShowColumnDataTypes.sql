@@ -11,6 +11,7 @@ select
 	SchemaId=	o.uid,
 	ColumnId=	c.colid,										--/не гарантирует последовательность
 	Sequence=	row_number()	over	( partition	by	o.Id	order	by	c.colid ),	--\гарантирует последовательность
+--не работает в случае только одного поля в таблице
 	IsFirstLast=	case	
 				when	row_number()	over	( partition	by	o.Id	order	by	c.colid )=	1	then	1
 				when	row_number()	over	( partition	by	o.Id	order	by	c.colid	desc )=	1	then	0

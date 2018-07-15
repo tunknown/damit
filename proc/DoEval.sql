@@ -55,7 +55,7 @@ if	object_id ( 'damit.DoEval' , 'p' )	is	null
 	exec	( 'create	proc	damit.DoEval	as	select	ObjectNotCreated=	1/0' )
 go
 alter	proc	damit.DoEval	-- вычисление условия из не более 10 разных переменных
-	@gExecutionLog		damit.TGUID
+	@iExecutionLog		TId
 as						-- return=0->условие НЕ выполняется, return=1->условие выполняется
 -- следить за SQL injection
 declare	@sMessage		TMessage
@@ -65,9 +65,9 @@ declare	@sMessage		TMessage
 	,@sTransaction		TSysName
 	,@bAlien		TBoolean
 
-	,@gTask			TGUID
-	,@gExecution		TGUID
-	,@gDistribution		TGUID
+	,@iTask			TId
+	,@iExecution		TId
+	,@iDistribution		TId
 
 	,@sExec			TScript
 
@@ -79,19 +79,19 @@ declare	@sMessage		TMessage
 	,@gVariableForEach	TGUID
 
 	,@sAliasForEach		TName
-	,@gExecutionForEach	TGUID
+	,@iExecutionForEach	TId
 	,@iSequenceForEach0	TIntegerNeg
 	,@iSequenceForEach1	TIntegerNeg
 ----------
 select
-	@gTask=			d.Task
-	,@gExecution=		el.Execution
-	,@gDistribution=	el.Distribution
+	@iTask=			d.Task
+	,@iExecution=		el.Execution
+	,@iDistribution=	el.Distribution
 from
 	damit.ExecutionLog	el
 	,damit.Distribution	d
 where
-		el.Id=		@gExecutionLog
+		el.Id=		@iExecutionLog
 	and	d.Id=		el.Distribution
 if	@@RowCount<>	1
 begin
@@ -107,7 +107,7 @@ select	top	( 1 )	-- неверно, но пока пришлось из-за возможных множественных запи
 	,@iCurrent=		convert ( bigint,	t.Value3 )
 	,@gVariableForEach=	t.Variable4
 from
-	damit.GetVariables	( @gExecutionLog,	'Begin',	'End',	'Step',	'Current',	'ForEach',	default,	default,	default,	default,	default )	t
+	damit.GetVariables	( @iExecutionLog,	'Begin',	'End',	'Step',	'Current',	'ForEach',	default,	default,	default,	default,	default )	t
 --where
 --	t.Sequence=	1	-- параметр должен быть всего один, а не первый из нескольких
 if	@@Error<>	0	or	@@RowCount<>	1
@@ -122,7 +122,7 @@ begin
 	if	@iCurrent	is	null	-- первый вход в цикл
 	begin
 		exec	@iError=	damit.SetupVariable
-						@gExecutionLog=	@gExecutionLog
+						@iExecutionLog=	@iExecutionLog
 						,@sAlias=	'Current'
 						,@oValue=	@iBegin
 						,@iSequence=	1	-- insert or update
@@ -138,7 +138,7 @@ begin
 		set	@iCurrent=	@iCurrent+	@iStep
 ----------
 		exec	@iError=	damit.SetupVariable
-						@gExecutionLog=	@gExecutionLog
+						@iExecutionLog=	@iExecutionLog
 						,@sAlias=	'Current'
 						,@oValue=	@iCurrent
 						,@iSequence=	1	-- insert or update
@@ -157,7 +157,7 @@ begin
 	if	0<	@iStep
 		select
 			@sAliasForEach=		p1.Alias
-			,@gExecutionForEach=	p1.ExecutionLog
+			,@iExecutionForEach=	p1.ExecutionLog
 			,@iSequenceForEach0=	max ( c1.Sequence )
 			,@iSequenceForEach1=	min ( p1.Sequence )
 		from
@@ -180,7 +180,7 @@ begin
 	else
 		select
 			@sAliasForEach=		p1.Alias
-			,@gExecutionForEach=	p1.ExecutionLog
+			,@iExecutionForEach=	p1.ExecutionLog
 			,@iSequenceForEach0=	min ( c1.Sequence )
 			,@iSequenceForEach1=	max ( p1.Sequence )
 		from
@@ -211,7 +211,7 @@ begin
 				end
 	where
 			Alias=		@sAliasForEach
-		and	ExecutionLog=	@gExecutionForEach
+		and	ExecutionLog=	@iExecutionForEach
 		and	Sequence	in	( @iSequenceForEach0,	@iSequenceForEach1 )
 	if	@@Error<>	0	or	@@RowCount	not	in	( 1,	2 )
 	begin
@@ -237,7 +237,7 @@ end
 	from
 		damit.Condition
 	where
-		Id=	@gTask
+		Id=	@iTask
 	union	all
 	select
 		Id=		0x7FFFFFFF
@@ -251,7 +251,7 @@ end
 	from
 		damit.Condition
 	where
-		Id=	@gTask
+		Id=	@iTask
 	union	all
 	select
 		c.Id
@@ -302,7 +302,7 @@ select	@sExec=	'
 select
 	@iRowCount=	sign ( count ( * ) )
 from
-	damit.GetVariables ( @gExecutionLog'
+	damit.GetVariables ( @iExecutionLog'
 	+	( select	distinct			-- distinct для повторяющихся полей в условии
 			[data()]=	',	/*'+	convert ( varchar ( 1 ),	cur.SequenceField-	1 )+	'*/'''+	cur.FieldName+	''''
 		from
@@ -371,8 +371,8 @@ set	@sExec=	replace (
 ----------
 exec	sp_executesql
 		@statement=	@sExec
-		,@params=	N'@gExecutionLog	uniqueidentifier,	@iRowCount	int	out'
-		,@gExecutionLog=@gExecutionLog
+		,@params=	N'@iExecutionLog	bigint,	@iRowCount	int	out'
+		,@iExecutionLog=@iExecutionLog
 		,@iRowCount=	@iRowCount	out
 if	@@Error<>	0	--or	@@RowCount=	0
 begin
@@ -389,7 +389,7 @@ begin
 	begin
 		---при последнем входе в цикл очищать 'Current', чтобы при следующей инициализации цикла в той же выгрузке(из-за goto не относящейся к завершению цикла) он работал
 		exec	@iError=	damit.SetupVariable
-						@gExecutionLog=	@gExecutionLog
+						@iExecutionLog=	@iExecutionLog
 						,@sAlias=	'Current'
 						,@oValue=	null
 						,@iSequence=	1	-- insert or update

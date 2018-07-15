@@ -4,14 +4,14 @@ if	object_id ( 'damit.DoSave' , 'p' )	is	null
 	exec	( 'create	proc	damit.DoSave	as	select	ObjectNotCreated=	1/0' )
 go
 alter	proc	damit.DoSave
-	@gExecutionLog		TGUID
+	@iExecutionLog		TId
 as
 declare	@sMessage		TMessage
 	,@iError		TInteger=	0
 	,@iRowCount		TInteger
 	,@bDebug		TBoolean=	1	-- 1=включить отладочные сообщения
 
-	,@gData			TGUID
+	,@iData			TId
 	,@sLogTable		TSystemName
 	,@sFieldsSortQuoted	TSystemName=	''
 	,@bCanBlank		TBool
@@ -23,17 +23,17 @@ declare	@sMessage		TMessage
 
 	,@sFileName		nvarchar ( 4000 )
 
-	,@gExecution		TGUID
-	,@gExecutionLogData	TGUID
-	,@gDistribution		TGUID
+	,@iExecution		TId
+	,@iExecutionLogData	TId
+	,@iDistribution		TId
 ----------
 select
-	@gExecution=	dl.Execution
-	,@gDistribution=dl.Distribution
+	@iExecution=	dl.Execution
+	,@iDistribution=dl.Distribution
 from
 	damit.ExecutionLog	dl
 where
-	dl.Id=		@gExecutionLog
+	dl.Id=		@iExecutionLog
 if	@@rowcount<>	1
 begin
 	select	@sMessage=	'Ошибка передачи параметров',
@@ -49,7 +49,7 @@ from
 	,damit.Format		f
 	,damit.Storage		s
 where
-		d.Id=		@gDistribution
+		d.Id=		@iDistribution
 	and	f.Id=		d.Task
 	and	s.Id=		f.Storage
 if	@@error<>	0	or	@@rowcount<>	1
@@ -59,7 +59,7 @@ begin
 	goto	error
 end
 ----------
-select	@gExecutionLogData=	convert ( uniqueidentifier , Value0 )	from	damit.GetVariables ( @gExecutionLog,	'Data:ExecutionLog',	default,	default,	default,	default,	default,	default,	default,	default,	default )
+select	@iExecutionLogData=	convert ( bigint , Value0 )	from	damit.GetVariables ( @iExecutionLog,	'Data:ExecutionLog',	default,	default,	default,	default,	default,	default,	default,	default,	default )
 if	@@RowCount<>	1
 begin
 	select	@sMessage=	'Ошибочно',
@@ -68,14 +68,14 @@ begin
 end
 ----------
 select
-	@gData=		da.Id
+	@iData=		da.Id
 	,@sLogTable=	da.DataLog
 from
 	damit.ExecutionLog	el
 	,damit.Distribution	d
 	,damit.Data		da
 where
-		el.Id=		@gExecutionLogData
+		el.Id=		@iExecutionLogData
 	and	d.Id=		el.Distribution
 	and	da.Id=		d.Task
 if	@@rowcount<>	1
@@ -91,7 +91,7 @@ select
 from
 	'+	@sLogTable+	'	with	( tablock , holdlock )
 where
-	ExecutionLog=	'''+	convert ( varchar ( 36 ) , @gExecutionLogData )+	''''
+	ExecutionLog=	'''+	convert ( varchar ( 36 ) , @iExecutionLogData )+	''''
 ----------
 exec	sp_executesql
 		@statement=	@sExec
@@ -110,7 +110,7 @@ begin
 		damit.DataField
 	where
 			IsResultset=	1
-		and	Data=		@gData
+		and	Data=		@iData
 	order	by
 		Sequence
 		,FieldName
@@ -123,7 +123,7 @@ begin
 	from
 		damit.DataField
 	where
-			Data=		@gData
+			Data=		@iData
 		and	Sort	is	not	null
 	order	by
 		abs ( Sort )
@@ -145,16 +145,16 @@ begin
 	end
 ----------
 	select	@sExec1=	'select	'+	left ( @sExec1,	len ( @sExec1 )-	1 )		-- с этим условием пишем только мы, поэтому можно использовать hint=nolock, чтобы bcp не зависло на ожидании, если есть транзакция
-		,@sExec2=	'select	'+	left ( @sExec2,	len ( @sExec2 )-	1 )+	'	from	'+	@sLogTable+	'	with	( nolock )	where	ExecutionLog=	'''+	convert ( char ( 36 ) , @gExecutionLogData )+	''''+	isnull ( '	order	by	'+	@sFieldsSortQuoted , '' )
+		,@sExec2=	'select	'+	left ( @sExec2,	len ( @sExec2 )-	1 )+	'	from	'+	@sLogTable+	'	with	( nolock )	where	ExecutionLog=	'''+	convert ( char ( 36 ) , @iExecutionLogData )+	''''+	isnull ( '	order	by	'+	@sFieldsSortQuoted , '' )
 ----------
 	if	@bDebug=	1
 	begin
 		print	( @sExec2 )
-		--select	*	from	damit.damit.ExecutionLog	where	Execution=	@gExecution
+		--select	*	from	damit.damit.ExecutionLog	where	Execution=	@iExecution
 	end
 ----------
 	exec	@iError=	@sSaveProc
-					@gExecutionLog=	@gExecutionLog
+					@iExecutionLog=	@iExecutionLog
 					,@sQueryHeader=	@sExec1
 					,@sQueryData=	@sExec2
 					,@sFileName=	@sFileName	output
@@ -166,7 +166,7 @@ begin
 	end
 ----------
 	exec	@iError=	damit.SetupVariable
-					@gExecutionLog=	@gExecutionLog
+					@iExecutionLog=	@iExecutionLog
 					,@sAlias=	'FileName'
 					,@oValue=	@sFileName
 	if	@@Error<>	0	or	@iError<	0

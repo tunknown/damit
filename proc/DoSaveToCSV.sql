@@ -4,7 +4,7 @@ if	object_id ( 'damit.DoSaveToCSV' , 'p' )	is	null
 	exec	( 'create	proc	damit.DoSaveToCSV	as	select	ObjectNotCreated=	1/0' )
 go
 alter	proc	damit.DoSaveToCSV	-- выгрузка данных с сервера
-	@gExecutionLog		uniqueidentifier
+	@iExecutionLog		TId
 	,@sQueryHeader		nvarchar ( max )
 	,@sQueryData		nvarchar ( max )
 	,@sFileName		nvarchar ( 256 )	output
@@ -26,7 +26,7 @@ declare	@sMessage		varchar ( 256 )
 	,@dtMoment		datetime
 	,@sFilterList		varchar ( max )
 
-	,@gExecution		uniqueidentifier
+	,@iExecution		TId
 ----------
 if	@@trancount>	0	-- bcp не будет иметь доступа к свежевставленным данным до commit tran
 begin
@@ -36,9 +36,9 @@ begin
 end
 ----------
 select
-	@gExecution=		l.Execution
+	@iExecution=		l.Execution
 	,@sFileName=		f.FileName
-	,@sExec=		c.Put
+	,@sExec=		c.Command
 from
 	damit.ExecutionLog	l
 	,damit.Distribution	i
@@ -46,7 +46,7 @@ from
 	,damit.Storage		s
 	,damit.Script		c
 where
-		l.Id=		@gExecutionLog
+		l.Id=		@iExecutionLog
 	and	i.Id=		l.Distribution
 	and	f.Id=		i.Task
 	and	s.Id=		f.Storage
@@ -63,12 +63,12 @@ select
 from
 	damit.ExecutionLog
 where
-	Id=		@gExecution
+	Id=		@iExecution
 ----------
 select
 	@sFilterList=		convert ( varchar ( max ),	Value0 )
 from
-	damit.GetVariables ( @gExecutionLog,	'FilterList',	default,	default,	default,	default,	default,	default,	default,	default,	default )
+	damit.GetVariables ( @iExecutionLog,	'FilterList',	default,	default,	default,	default,	default,	default,	default,	default,	default )
 if	@@RowCount>	1
 begin
 	select	@sMessage=	'Ошибочно заданы параметры выгрузки',
@@ -77,7 +77,7 @@ begin
 end
 ----------
 select
-	@sHeader=		convert ( char ( 36 ) , @gExecutionLog )		-- часть имени файлов совпадает с идентификатором из лога
+	@sHeader=		convert ( char ( 36 ) , @iExecutionLog )		-- часть имени файлов совпадает с идентификатором из лога
 	,@sCmdFileName=		DirName+	'\'+	@sHeader+	'.cmd'
 	,@sCmdFileNameExec=	case	charindex ( '"' , DirName )
 					when	0	then	quotename ( DirName+	'\'+	@sHeader+	'.cmd' , '"' )	-- если в пути+имени файла есть спецсимволы, например, пробел
@@ -98,7 +98,7 @@ select
 from
 	damit.GetFormatFileName ( @sFileName , @dtMoment , @sFilterList )
 ----------
-set	@sExec=	convert ( nvarchar ( max ) , damit.GetReplacement ( @gExecutionLog,	default,	@sExec ) )
+set	@sExec=	convert ( nvarchar ( max ) , damit.GetReplacement ( @iExecutionLog,	default,	@sExec ) )
 
 
 

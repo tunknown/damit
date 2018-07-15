@@ -5,7 +5,7 @@ if	object_id ( 'damit.SetupVariable' , 'p' )	is	null
 go
 alter	proc	damit.SetupVariable
 --	@gId		TGUID=		null	output
-	@gExecutionLog	TGUID
+	@iExecutionLog	TId
 	,@sAlias	TName
 	,@oValue	sql_variant=	null
 	,@mValue	image=		null
@@ -24,38 +24,38 @@ declare	@sMessage	TMessage
 	,@bAlien	TBoolean
 	,@iError2	TInteger=	0
 
-	,@gExecution	TGUID
+	,@iExecution	TId
 	,@iSequenceEx	TInteger
 	,@dtStart	TDateTime
 ----------
 select
-	@gExecution=	Execution
+	@iExecution=	Execution
 	,@iSequenceEx=	Sequence
 	,@dtStart=	Start
 from
 	damit.ExecutionLog
 where
-	Id=		@gExecutionLog
+	Id=		@iExecutionLog
 ----------
 if	exists	( select
 			1
 		from
 			damit.ExecutionLog
 		where
-				Execution=	@gExecution
+				Execution=	@iExecution
 			and	@iSequenceEx<=	Sequence
-			and	Id<>		@gExecutionLog		-- исключаем себ€, т.к. примен€ем <= дл€ Sequence
-			and	Execution<>	@gExecutionLog		-- можно мен€ть только "общие" переменные корневого шага
+			and	Id<>		@iExecutionLog		-- исключаем себ€, т.к. примен€ем <= дл€ Sequence
+			and	Execution<>	@iExecutionLog		-- можно мен€ть только "общие" переменные корневого шага
 		union	all
 		select
 			1
 		from
 			damit.ExecutionLog
 		where
-				Execution=	@gExecution
+				Execution=	@iExecution
 			and	@dtStart<=	Start
-			and	Id<>		@gExecutionLog
-			and	Execution<>	@gExecutionLog )	-- исключаем себ€, т.к. примен€ем <= дл€ Start
+			and	Id<>		@iExecutionLog
+			and	Execution<>	@iExecutionLog )	-- исключаем себ€, т.к. примен€ем <= дл€ Start
 begin
 	select	@sMessage=	'Ќельз€ мен€ть переменные другого шага',
 		@iError=	-3
@@ -83,7 +83,7 @@ begin
 		damit.Variable
 	where
 			Alias=		@sAlias
-		and	( ExecutionLog=	@gExecutionLog	or	@gExecutionLog	is	null	and	ExecutionLog	is	null )
+		and	( ExecutionLog=	@iExecutionLog	or	@iExecutionLog	is	null	and	ExecutionLog	is	null )
 		and	( Sequence=	@iSequence	or	@iSequence	is	null )
 	if	@@Error<>	0
 	begin
@@ -107,7 +107,7 @@ begin
 					from
 						damit.Variable
 					where
-							( ExecutionLog=	@gExecutionLog	or	@gExecutionLog	is	null	and	ExecutionLog	is	null )
+							( ExecutionLog=	@iExecutionLog	or	@iExecutionLog	is	null	and	ExecutionLog	is	null )
 						and	Alias=		@sAlias ) , 0 )+	1
 end
 else
@@ -118,7 +118,7 @@ begin
 		Value=		@oValue
 		,ValueBLOB=	@mValue
 	where
-			ExecutionLog=	@gExecutionLog
+			ExecutionLog=	@iExecutionLog
 		and	Alias=		@sAlias
 		and	Sequence=	@iSequence
 	select	@iError=	@@Error
@@ -133,8 +133,8 @@ end
 ----------
 if	@bAdd=	1	or	@iRowCount=	0
 begin
-	insert	damit.Variable	( Id,	ExecutionLog,	Alias,	Value,	ValueBLOB,	Sequence )
-	select			newid(),@gExecutionLog,	@sAlias,@oValue,@mValue,	@iSequence
+	insert	damit.Variable	( ExecutionLog,	Alias,	Value,	ValueBLOB,	Sequence )
+	select			@iExecutionLog,	@sAlias,@oValue,@mValue,	@iSequence
 	if	@@Error<>	0	or	@@RowCount<>	1
 	begin
 		select	@sMessage=	'ќшибка',

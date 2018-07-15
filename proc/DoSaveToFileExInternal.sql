@@ -11,10 +11,10 @@ GO
 if	db_id ( 'damit' )	is	not	null	-- иначе использовать текущую базу
 	use	damit
 go
-if	object_id ( 'damit.DoSaveToFileEx' , 'p' )	is	null
-	exec	( 'create	proc	damit.DoSaveToFileEx	as	select	ObjectNotCreated=	1/0' )
+if	object_id ( 'damit.DoSaveToFileExInternal' , 'p' )	is	null
+	exec	( 'create	proc	damit.DoSaveToFileExInternal	as	select	ObjectNotCreated=	1/0' )
 go
-alter	proc	damit.DoSaveToFileEx
+alter	proc	damit.DoSaveToFileExInternal
 	@mData		image			-- данные для выгрузки в файл, нельзя подавать тип text
 	,@sFileName	nvarchar ( 256 )	-- имя файла
 	,@sCharset	sysname=	null	-- null=бинарный файл, иначе кодовая страница текста, например, 'windows-1251','utf-8' или любая из HKEY_CLASSES_ROOT\MIME\Database\Charset
@@ -29,7 +29,6 @@ declare	@bDebug		bit
 	,@sMessage	varchar ( 256 )
 	,@iFile		int
 	,@s		varchar ( 256 )
-	,@sLinkedTable	sysname
 	,@sPath		nvarchar ( 256 )
 	,@sPath1	nvarchar ( 256 )
 	,@sDB		sysname
@@ -39,8 +38,6 @@ declare	@bDebug		bit
 	,@iResult	int
 ----------
 set	@bDebug=	1
-----------
-if	app_name()	like	'SSIS%'	set	@bDebug=	0	-- при выполнении из пакета не заходим
 ----------
 set	@iError=	0
 ----------

@@ -8,9 +8,8 @@ alter	function	damit.ToDateTimeFromDateAndTime		-- сложение полей даты и времени
 	,@dtTime	datetime	)	-- время с отбрасываемой датой
 returns	datetime
 as
-----------
 begin
-	return	( convert ( datetime , @dtDate )+	convert ( time , @dtTime ) )
+	return	( dateadd ( ms,	datediff ( ms,	0,	@dtTime ),	convert ( datetime,	@dtDate ) ) )	-- после sql2008 + не работает
 end
 go
-select	getdate(),	damit.ToDateTimeFromDateAndTime	( getdate() , getdate() )
+select	getdate(),	damit.ToDateTimeFromDateAndTime	( getdate() , '23:59:59.997' )

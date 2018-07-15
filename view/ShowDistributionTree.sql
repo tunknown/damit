@@ -45,7 +45,7 @@ select
 	,Caption=	coalesce ( d.Target,	q.Alias,	f.FileName/*,	p.Id*/,	i.Name,	s.Name )
 from
 	cte
-	inner	join	damit.TaskEntity	te	on
+	left	join	damit.Task		te	on	-- для пустого шага, например, держателя общих параметров
 		te.Id=		cte.Task
 	left	join	damit.Data		d	on
 		d.Id=		cte.Task
@@ -53,7 +53,7 @@ from
 		q.Id=		cte.Task
 	left	join	damit.Format		f	on
 		f.Id=		cte.Task
-/*	left	join	damit.ProtocolEntity	p	on
+/*	left	join	damit.Protocol		p	on
 		p.Id=		cte.Task
 */	left	join	damit.Distribution	i	on
 		i.Id=		cte.Task

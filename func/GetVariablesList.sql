@@ -6,32 +6,32 @@ if	object_id ( 'damit.GetVariablesList' , 'tf' )	is	null
 	exec	( 'create	function	damit.GetVariablesList()	returns	@t	table	( i	int )	as	begin	return	end' )
 go
 alter	function	damit.GetVariablesList	-- получение списка переменных и количества их значений
-(	@gExecutionLog	uniqueidentifier )
+(	@iExecutionLog	TId )
 returns	@tResult	table
 (	Name		varchar ( 256 )	not null
 	,Counter	smallint	null )	-- damit.Variable+damit.Parameter не предназначены для передачи больших датасетов
 as
 begin
-	declare	@gDistributionStep	uniqueidentifier
-		,@gDistributionRoot	uniqueidentifier
-		,@gExecution		uniqueidentifier
+	declare	@iDistributionStep	TId
+		,@iDistributionRoot	TId
+		,@iExecution		TId
 ----------
 	select
-		@gDistributionStep=	Distribution
-		,@gExecution=		Execution
+		@iDistributionStep=	Distribution
+		,@iExecution=		Execution
 	from
 		damit.ExecutionLog
 	where
-		Id=			@gExecutionLog
+		Id=			@iExecutionLog
 ----------
 	select
-		@gDistributionRoot=	Distribution
-	--	,@gExecution=		Execution
+		@iDistributionRoot=	Distribution
+	--	,@iExecution=		Execution
 	from
 		damit.ExecutionLog
 	where
-			Id=		@gExecution
-		and	Execution=	@gExecution
+			Id=		@iExecution
+		and	Execution=	@iExecution
 ----------
 
 
@@ -100,7 +100,7 @@ damit.Variable
 				damit.Parameter
 			where
 					DistributionRoot	is	null
-				and	DistributionStep=	@gDistributionStep
+				and	DistributionStep=	@iDistributionStep
 				and	Source		is	null			-- для шаблона нельзя отнаследовать настройки из неизвестного источника
 				and	Alias		is	not	null
 --				and	Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
@@ -114,8 +114,8 @@ damit.Variable
 			from
 				damit.Parameter
 			where
-					DistributionRoot=	@gDistributionRoot
-				and	DistributionStep=	@gDistributionStep
+					DistributionRoot=	@iDistributionRoot
+				and	DistributionStep=	@iDistributionStep
 				and	Source		is	null
 				and	Alias		is	not	null
 --				and	Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
@@ -131,7 +131,7 @@ damit.Variable
 				,damit.Parameter	p
 			where
 					c.DistributionRoot	is	null
-				and	c.DistributionStep=	@gDistributionStep
+				and	c.DistributionStep=	@iDistributionStep
 				and	p.Id=			c.Source
 				and	c.Alias		is	null
 				and	p.Alias		is	not	null
@@ -148,7 +148,7 @@ damit.Variable
 				,damit.Parameter	p
 			where
 					c.DistributionRoot	is	null
-				and	c.DistributionStep=	@gDistributionStep
+				and	c.DistributionStep=	@iDistributionStep
 				and	p.Id=			c.Source
 				and	c.Alias		is	not	null
 --				and	c.Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
@@ -172,13 +172,13 @@ damit.Variable
 							damit.ExecutionLog	el
 							,damit.Variable		v
 						where
-								el.Execution=	@gExecution
+								el.Execution=	@iExecution
 							and	v.ExecutionLog=	el.Id )	t	on
 					t.Distribution=		p.DistributionStep
 				and	t.Alias=		p.Alias
 			where
-					c.DistributionRoot=	@gDistributionRoot
-				and	c.DistributionStep=	@gDistributionStep
+					c.DistributionRoot=	@iDistributionRoot
+				and	c.DistributionStep=	@iDistributionStep
 				and	c.Alias			is	null
 				and	t.Distribution		is	null			-- отдавать значение параметра только если нет заполненного оверрайда в переменных
 			union	all
@@ -199,13 +199,13 @@ damit.Variable
 							damit.ExecutionLog	el	-- что делать при дублировании при join, если шаг выгрузки повторяется(например, из-за применения шаблона)?
 							,damit.Variable		v
 						where
-								el.Execution=	@gExecution
+								el.Execution=	@iExecution
 							and	v.ExecutionLog=	el.Id )	t	on
 					t.Distribution=		p.DistributionStep
 				and	t.Alias=		p.Alias
 			where
-					c.DistributionRoot=	@gDistributionRoot
-				and	c.DistributionStep=	@gDistributionStep
+					c.DistributionRoot=	@iDistributionRoot
+				and	c.DistributionStep=	@iDistributionStep
 				and	c.Alias		is	not	null
 --				and	c.Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
 				and	t.Distribution	is	null		-- отдавать значение параметра только если нет заполненного оверрайда в переменных
@@ -219,7 +219,7 @@ damit.Variable
 			from
 				damit.Variable
 			where
-					ExecutionLog=	@gExecutionLog			-- бесполезно- только если передавать значение между частями одного шага?
+					ExecutionLog=	@iExecutionLog			-- бесполезно- только если передавать значение между частями одного шага?
 --				and	Alias	is	not	null			-- там уже not null, пишем только для соответствия другим запросам
 --				and	Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
 			union	all
@@ -237,13 +237,13 @@ damit.Variable
 --				and	p.Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
 				inner	join	damit.ExecutionLog	el	on
 					el.Distribution=	p.DistributionStep
-				and	el.Execution=		@gExecution
+				and	el.Execution=		@iExecution
 				inner	join	damit.Variable		v	on
 					v.ExecutionLog=		el.Id
 				and	v.Alias=		p.Alias
 			where
-					c.DistributionRoot=	@gDistributionRoot
-				and	c.DistributionStep=	@gDistributionStep
+					c.DistributionRoot=	@iDistributionRoot
+				and	c.DistributionStep=	@iDistributionStep
 				and	c.Alias		is	null
 			union	all
 			select
@@ -258,13 +258,13 @@ damit.Variable
 					p.Id=			c.Source
 				inner	join	damit.ExecutionLog	el	on	-- что делать при дублировании при join, если шаг выгрузки повторяется(например, из-за применения шаблона)?
 					el.Distribution=	p.DistributionStep
-				and	el.Execution=		@gExecution
+				and	el.Execution=		@iExecution
 				inner	join	damit.Variable		v	on
 					v.ExecutionLog=		el.Id
 				and	v.Alias=		p.Alias
 			where
-					c.DistributionRoot=	@gDistributionRoot
-				and	c.DistributionStep=	@gDistributionStep
+					c.DistributionRoot=	@iDistributionRoot
+				and	c.DistributionStep=	@iDistributionStep
 				and	c.Alias		is	not	null
 --				and	c.Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
  )	t )	t

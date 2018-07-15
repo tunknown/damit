@@ -4,7 +4,7 @@ if	object_id ( 'damit.DoGet' , 'p' )	is	null
 	exec	( 'create	proc	damit.DoGet	as	select	ObjectNotCreated=	1/0' )
 go
 alter	proc	damit.DoGet	-- выгрузка данных с сервера
-	@gExecutionLog		TGUID
+	@iExecutionLog		TId
 as
 -- следить за SQL injection
 -- сначала лучше применять выгрузку по изменению содержимого, после уточнения бизнес-процесса можно перейти к выгрузке по дате изменения
@@ -96,15 +96,15 @@ declare	@sMessage		TMessage
 	,@bIsParameterized	bit
 	,@bCreateDataLog	bit
 
-	,@gData			TGUID
-	,@gDataNew		TGUID
+	,@iData			TId
+	,@iDataNew		TId
 	,@sExecAtServer		TSystemName
 	,@sLogTableLocal	TSystemName
 	,@sLogTableT		TSystemName
 
 	,@iFilterJoinFields	TInteger
 
-	,@gExecution		TGUID
+	,@iExecution		TId
 
 	,@dtFilterStart		TDateTime		-- фильтрация по дате изменения обновления/актуальности, в т.ч. и при неизменных данных
 	,@dtFilterFinish	TDateTime		-- фильтрация по дате изменения обновления/актуальности, в т.ч. и при неизменных данных
@@ -112,20 +112,20 @@ declare	@sMessage		TMessage
 	,@sParamValue		varchar ( max )
 	,@oParamValue		sql_variant
 ----------
-select	@sExecutionLog=	''''+	convert ( char ( 36 ) , @gExecutionLog )+	''''
+select	@sExecutionLog=	''''+	convert ( char ( 36 ) , @iExecutionLog )+	''''
 	,@sFilterList=	''
 ----------
-set	@sTransaction=	convert ( varchar ( 256 ) , @@procid )+	'_'+	convert ( char ( 36 ) , @gExecutionLog )
+set	@sTransaction=	convert ( varchar ( 256 ) , @@procid )+	'_'+	convert ( char ( 36 ) , @iExecutionLog )
 ----------
 select
-	@gData=		d.Task
+	@iData=		d.Task
 	,@sData=	''''+	convert ( char ( 36 ) , d.Task )+	''''
-	,@gExecution=	el.Execution
+	,@iExecution=	el.Execution
 from
 	damit.ExecutionLog	el
 	,damit.Distribution	d
 where
-		el.Id=	@gExecutionLog
+		el.Id=	@iExecutionLog
 	and	d.Id=	el.Distribution
 ----------
 select
@@ -142,7 +142,7 @@ select
 from
 	damit.Data
 where
-	Id=		@gData
+	Id=		@iData
 if	@@RowCount<>	1
 begin
 	select	@sMessage=	'Ошибочно задана выгрузка',
@@ -154,9 +154,9 @@ if		@bCanChanged=	1	--чтобы upd не исключать из слежения за del
 	and	@bCanCreated=	0
 begin
 	select	top	1
-		@gDataNew=	d.Id
+		@iDataNew=	d.Id
 	from
-		damit.GetCompatibleData ( @gData )	gcd
+		damit.GetCompatibleData ( @iData )	gcd
 		,damit.Data				d
 	where
 			d.Id=		gcd.Data
@@ -165,7 +165,7 @@ begin
 	if	exists	( select
 				1
 			from
-				damit.GetCompatibleData ( @gDataNew )	gcd
+				damit.GetCompatibleData ( @iDataNew )	gcd
 				,damit.Data				d
 			where
 					d.Id=		gcd.Data
@@ -177,7 +177,7 @@ else
 		select
 			@bCanRenew=	sign ( count ( * ) )
 		from
-			damit.GetCompatibleData ( @gData )	gcd
+			damit.GetCompatibleData ( @iData )	gcd
 			,damit.Data				d
 		where
 				d.Id=		gcd.Data
@@ -187,7 +187,7 @@ select
 	@dtFilterStart=		convert ( datetime,	Value0 )
 	,@dtFilterFinish=	convert ( datetime,	Value1 )
 from
-	damit.GetVariables ( @gExecutionLog,	'FilterStart',	'FilterFinish',	default,	default,	default,	default,	default,	default,	default,	default )
+	damit.GetVariables ( @iExecutionLog,	'FilterStart',	'FilterFinish',	default,	default,	default,	default,	default,	default,	default,	default )
 if	@@RowCount>	1
 begin
 	select	@sMessage=	'Ошибочно заданы параметры выгрузки',
@@ -198,7 +198,7 @@ end
 select
 	@sFilterList=		@sFilterList+	','+	convert ( varchar ( max ),	Value0 )	-- ***авторазделитель может оказаться в самом списке значений, переделать далее в месте использования на Variables вместо ToListFromStringAuto
 from
-	damit.GetVariables ( @gExecutionLog,	'FilterList',	default,	default,	default,	default,	default,	default,	default,	default,	default )
+	damit.GetVariables ( @iExecutionLog,	'FilterList',	default,	default,	default,	default,	default,	default,	default,	default,	default )
 order	by
 	Sequence
 ----------
@@ -216,7 +216,7 @@ select	top	1								-- если дополнительно ограничить поля PK/UQ=not null, то под
 from
 	damit.DataField
 where
-		Data=		@gData
+		Data=		@iData
 	and	IsRelationship=	1
 order	by
 	Sequence
@@ -227,7 +227,7 @@ select	top	1
 from
 	damit.DataField
 where
-		Data=		@gData
+		Data=		@iData
 	and	IsDate=		1
 order	by
 	Sequence
@@ -238,7 +238,7 @@ select	top	1
 from
 	damit.DataField
 where
-		Data=		@gData
+		Data=		@iData
 	and	IsList=		1
 order	by
 	Sequence
@@ -253,7 +253,7 @@ select
 from
 	damit.DataField
 where
-		Data=		@gData
+		Data=		@iData
 	and	Sort	is	not	null
 order	by
 	abs ( Sort )
@@ -263,7 +263,7 @@ select
 from
 	damit.DataField
 where
-		Data=		@gData
+		Data=		@iData
 	and	Value	is	not	null
 ----------
 if	len ( @sFieldsSortQuoted )>	0
@@ -441,7 +441,7 @@ begin
 		select	@sExecShort=		'
 if	object_id ( '''+	@sLogTableT+	''',	''u'' )	is	not	null
 	drop	table	'+	@sLogTableLocal
-			,@iDataLogObject=	null		-- правильнее учесть условие ExecutionLog=parameter(@gExecutionLog) в new части генерируемого запроса
+			,@iDataLogObject=	null		-- правильнее учесть условие ExecutionLog=parameter(@iExecutionLog) в new части генерируемого запроса
 			,@sDataLogType=		null
 ----------
 		if	@bDebug=	1
@@ -507,7 +507,7 @@ where
 		,@iRowCount=	@@RowCount
 	if	@iError<>	0	or	@iRowCount=	0
 	begin
-		select	@sMessage=	'Ошибка получения полей целевой таблицы лога данных ExecutionLog='+	convert ( char ( 36 ),	@gExecutionLog )+	' @@Error='+	convert ( varchar ( 256 ),	@iError )+	' @@RowCount='+	convert ( varchar ( 256 ),	@iRowCount ),
+		select	@sMessage=	'Ошибка получения полей целевой таблицы лога данных ExecutionLog='+	convert ( char ( 36 ),	@iExecutionLog )+	' @@Error='+	convert ( varchar ( 256 ),	@iError )+	' @@RowCount='+	convert ( varchar ( 256 ),	@iRowCount ),
 			@iError=	-3
 		goto	error
 	end
@@ -531,7 +531,7 @@ from
 where
 		df.FieldName=	f.name		-- не ясно, по каким полям жоинить- правильно
 	and	f.IsParam=	0
-	and	df.Data=	@gData
+	and	df.Data=	@iData
 set	@iFilterJoinFields=	@@RowCount
 ----------
 if		@sFilterTable	is	not	null
@@ -574,7 +574,7 @@ begin
 				select
 					@oParamValue=	Value0
 				from
-					damit.GetVariables ( @gExecutionLog,	@sExec1,	default,	default,	default,	default,	default,	default,	default,	default,	default )
+					damit.GetVariables ( @iExecutionLog,	@sExec1,	default,	default,	default,	default,	default,	default,	default,	default,	default )
 				if	1<	@@RowCount
 				begin
 					select	@sMessage=	'Найдено более одного значения для параметра '+	@sExec1+	' процедуры '+	@sTargetTable
@@ -754,7 +754,7 @@ from
 	left	join	#syscolumns_Target	sc	on
 		sc.FieldName=	df.FieldName
 where
-		df.Data=	@gData
+		df.Data=	@iData
 order	by
 	df.Sequence
 	,df.FieldName
@@ -764,7 +764,7 @@ select
 from
 	damit.DataField
 where
-		Data=		@gData
+		Data=		@iData
 	and	IsComparison=	1
 ----------
 if	@bComparison=	1							-- выгрузка только изменившихся данных
@@ -789,7 +789,7 @@ begin
 				union	all
 				'
 	from
-		damit.GetCompatibleData	( @gData )	GCD
+		damit.GetCompatibleData	( @iData )	GCD
 		,damit.Data				d
 	where
 		d.Id=		GCD.Data
@@ -828,7 +828,7 @@ begin
 				from
 					damit.ExecutionLog	L
 					,damit.Distribution	i
-					,damit.GetCompatibleData	( @gData )	cd
+					,damit.GetCompatibleData	( @iData )	cd
 					,'+	@sExecData1+	'	D'+	case
 											when		@bCanRemoved=		1	-- @bComparison здесь не подходит
 												and	@iFilterJoinFields=	0
@@ -868,11 +868,11 @@ end*/
 ----------
 set	@sExec=	'
 ----------
-declare	@gExecutionLog	uniqueidentifier
-	,@gData		uniqueidentifier
+declare	@iExecutionLog	bigint
+	,@iData		bigint
 ----------
-select	@gExecutionLog=	'+	@sExecutionLog+	'
-	,@gData=	'+	@sData+	'
+select	@iExecutionLog=	'+	@sExecutionLog+	'
+	,@iData=	'+	@sData+	'
 ----------'+	case	@bCreateDataLog
 			when	0	then	'
 insert
@@ -891,7 +891,7 @@ into
 			else			''
 		end+	'
 select
-	ExecutionLog=	@gExecutionLog
+	ExecutionLog=	@iExecutionLog
 	,IsCreated=	'+	case	@bCanCreated		-- если нет сравнения, то нет и данных о записи
 					when	1	then	'case	when	new.'
 							+	@sFieldRelationshipQuoted
@@ -942,7 +942,7 @@ from
 if	@iFilterJoinFields>	0
 	select
 		@sExec=	@sExec+	'
-	inner	join	'+	@sFilterTable+	'	( @gExecutionLog,	'+
+	inner	join	'+	@sFilterTable+	'	( @iExecutionLog,	'+
 							case
 								when	@sFilterStart	is	null	then	'null'
 								else						@sFilterStart
@@ -1081,7 +1081,7 @@ begin
 	from
 		damit.DataField
 	where
-			Data=		@gData
+			Data=		@iData
 		and	IsRelationship=	1
 	order	by
 		Sequence
@@ -1106,12 +1106,12 @@ set	@bAlien=	sign ( @@TranCount )
 if	@bAlien=	0	begin	tran	@sTransaction	else	save	tran	@sTransaction
 ----------
 /*if	@bDebug=	1
-	select			@gExecutionLog,	@gDistribution,	@dtStart,	@dtFilterStart,	@dtFilterFinish,	@sFilterList
+	select			@iExecutionLog,	@iDistribution,	@dtStart,	@dtFilterStart,	@dtFilterFinish,	@sFilterList
 ----------
 set	@dtStart=	getdate()	-- после блокировки данных можно получать дату начала
 ----------
 insert	damit.ExecutionLog	( Id,		Distribution,	Start,		FilterStart,	FilterFinish,		List )		-- создаём новую выгрузку как можно позже, чтобы в случае ошибки её не пришлось подчищать?
-select				@gExecutionLog,	@gDistribution,	@dtStart,	@dtFilterStart,	@dtFilterFinish,	@sFilterList
+select				@iExecutionLog,	@iDistribution,	@dtStart,	@dtFilterStart,	@dtFilterFinish,	@sFilterList
 if	@@Error<>	0	or	@@RowCount<>	1
 begin
 	select	@sMessage=	'Ошибка создания выгрузки',
@@ -1131,23 +1131,8 @@ begin
 	goto	error
 end
 ----------
-if	@iRowCount=	0
-begin
-	exec	@iError=	damit.SetupVariable
-					@gExecutionLog=	@gExecution
-					,@sAlias=	'KostylDlyaOstanovki'
-					,@oValue=	1
-					,@iSequence=	1	-- insert or update
-	if	@@Error<>	0	or	@iError<	0
-	begin
-		select	@sMessage=	'Ошибка',
-			@iError=	-3
-		goto	error
-	end
-end
-----------
 exec	@iError=	damit.SetupVariable
-				@gExecutionLog=	@gExecutionLog
+				@iExecutionLog=	@iExecutionLog
 				,@sAlias=	'RowCount'
 				,@oValue=	@iRowCount
 if	@@Error<>	0	or	@iError<	0
@@ -1158,9 +1143,9 @@ begin
 end
 ----------
 exec	@iError=	damit.SetupVariable
-				@gExecutionLog=	@gExecutionLog
+				@iExecutionLog=	@iExecutionLog
 				,@sAlias=	'Data:ExecutionLog'
-				,@oValue=	@gExecutionLog
+				,@oValue=	@iExecutionLog
 if	@@Error<>	0	or	@iError<	0
 begin
 	select	@sMessage=	'Ошибка',
@@ -1177,7 +1162,7 @@ begin
 		,Message=	isnull ( Message , '' )+	'
 Попытка восстановления стёртой записи'
 	where
-		Id=		@gExecutionLog
+		Id=		@iExecutionLog
 	if	@@Error<>	0	or	@@RowCount<>	1
 	begin
 		select	@sMessage=	'Ошибка обновления информации о выгрузке',
@@ -1205,7 +1190,7 @@ set
 	,ErrorCode=	@iError		-- пока ErrorCode=null выгрузка считается незавершённой и её результат нельзя учитывать в следующих запусках
 	,Message=	@sMessage
 where
-	Id=		@gExecutionLog
+	Id=		@iExecutionLog
 --if	@@Error<>	0	or	@@RowCount<>	1
 --begin
 --	select	@sMessage=	'Ошибка изменения статуса выгрузки',

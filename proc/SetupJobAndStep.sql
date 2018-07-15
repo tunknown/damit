@@ -7,7 +7,7 @@ alter	proc	damit.SetupJobAndStep
 	@gJob			uniqueidentifier=	null	output	--\задан один из них или оба
 	,@sJobName		sysname=		null		--/
 	,@sStepName		sysname=		null
-	,@gDistribution		uniqueidentifier=	null		--\
+	,@iDistribution		TId=			null		--\
 	,@sParameters		varchar ( max )=	null		--\заданы либо эти два, либо тот один. как узнать, есть ли шаг с таким содержанием?
 	,@sScript		varchar ( max )=	null		--/
 	,@sNotifyEMail		sysname=		'Errors'
@@ -53,8 +53,8 @@ if	@bAlien=	0	begin	tran	@sTransaction	else	save	tran	@sTransaction
 ----------
 select	@gJob=	job_id	FROM	msdb..sysjobs	where	name=	@sJobName	or	job_id=	@gJob
 if		1<	@@rowcount
-	or	@gDistribution	is	not	null	and	@sScript	is	not	null
-	or	@gDistribution	is		null	and	@sScript	is		null
+	or	@iDistribution	is	not	null	and	@sScript	is	not	null
+	or	@iDistribution	is		null	and	@sScript	is		null
 begin
 	select	@sMessage=	'Заданы неверные параметры',
 		@iError=	-3
@@ -144,9 +144,9 @@ begin
 	end
 end
 ----------
-if	@gDistribution	is	not	null
-	set	@sScript=	'exec	damit.damit.DoTransfer
-			@gDistributionId=	''{'+	convert ( char ( 36 ) , @gDistribution )+	'}'''
+if	@iDistribution	is	not	null
+	set	@sScript=	'exec	damit.damit.Do
+			@iDistributionId=	''{'+	convert ( char ( 36 ) , @iDistribution )+	'}'''
 			+	case
 					when	@sParameters	is	null	then	''
 					else						'

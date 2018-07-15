@@ -15,8 +15,8 @@ declare	@sMessage		TMessage
 
 	,@iStep			TInteger
 	,@gJob			TGUID
-	,@gDistribution		TGUID
-	,@gDistributionLog	TGUID
+	,@iDistribution		TId
+	,@iDistributionLog	TId
 
 	,@dtFilterStart		TDateTime
 	,@dtFilterFinish	TDateTime
@@ -28,7 +28,7 @@ create	table	#jobs
 (	Id		int	identity ( 1 , 1 )
 	,job_id		uniqueidentifier
 	,step_id	int
-	,DistributionId	uniqueidentifier	)
+	,DistributionId	bigint	)
 ----------
 set	@sExec=	'insert
 	#jobs	( job_id,	step_id,	DistributionId )
@@ -69,10 +69,10 @@ open	c
 ----------
 while	1=	1
 begin
-	fetch	next	from	c	into	@gJob,	@iStep,	@gDistribution
+	fetch	next	from	c	into	@gJob,	@iStep,	@iDistribution
 	if	@@fetch_status<>	0	break
 ----------
-	select	@gDistributionLog=	null
+	select	@iDistributionLog=	null
 		,@sFilterList=		null
 		,@dtFilterStart=	null
 		,@dtFilterFinish=	null
@@ -122,15 +122,15 @@ if	@bDebug=	1
 		,dtFilterFinish=@dtFilterFinish
 		,sFilterList=	@sFilterList
 ----------
-	exec	@iError=	damit.DoTransfer
-					@gDistributionLogId=	@gDistributionLog	out
-					,@gDistributionId=	@gDistribution
+	exec	@iError=	damit.Do
+					@iDistributionLogId=	@iDistributionLog	out
+					,@iDistributionId=	@iDistribution
 					,@dtFilterStart=	@dtFilterStart
 					,@dtFilterFinish=	@dtFilterFinish
 					,@sFilterList=		@sFilterList
 	if	@@Error<>	0	or	@iError<	0
 	begin
-		select	@sMessage=	'Ошибка выгрузки Distribution='''+	convert ( char ( 36 ) , @gDistribution )+	''''+	isnull ( ' ,DistributionLog='''+	convert ( char ( 36 ) , @gDistributionLog )+	'''' , '' ),
+		select	@sMessage=	'Ошибка выгрузки Distribution='''+	convert ( char ( 36 ) , @iDistribution )+	''''+	isnull ( ' ,DistributionLog='''+	convert ( char ( 36 ) , @iDistributionLog )+	'''' , '' ),
 			@iError=	-3
 		goto	error
 	end

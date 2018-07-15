@@ -4,7 +4,7 @@ if	object_id ( 'damit.DoSendFTP' , 'p' )	is	null
 	exec	( 'create	proc	damit.DoSendFTP	as	select	ObjectNotCreated=	1/0' )
 go
 alter	proc	damit.DoSendFTP
-	@gExecutionLog		TGUID
+	@iExecutionLog		TId
 as
 -- следить за SQL injection
 -- опасно чередовать использование выгрузок по изменению даты и изменению содержимого
@@ -31,8 +31,8 @@ declare	@sMessage		TMessage
 
 
 
-	,@gScript		TGUID
-	,@gProtocol		TGUID
+	,@iScript		TId
+	,@iProtocol		TId
 	,@bSFTP			TBoolean
 	,@bFTPS			TBoolean
 
@@ -48,8 +48,6 @@ declare	@sMessage		TMessage
 	,@iRetryAttempts	TInteger
 
 --	,@sExecType		varchar ( 32 )
-	,@sScriptGet		TScript
-	,@sScriptPut		TScript
 
 	,@sScript		TScript
 	,@sScriptCmd		varchar ( 4000 )
@@ -71,16 +69,16 @@ end*/
 ----------
 ----------
 select
-	@gProtocol=	D.Task
+	@iProtocol=	D.Task
 from
 	damit.ExecutionLog	DL
 	inner	join	damit.Distribution	D	on
 		D.Id=		DL.Distribution
-	inner	join	damit.ProtocolEntity	PE	on
+	inner	join	damit.Protocol		PE	on
 		PE.Id=		D.Task
 	and	isnull ( PE.SFTP,	PE.FTPS )	is	not	null
 where
-		DL.Id=		@gExecutionLog
+		DL.Id=		@iExecutionLog
 if	@@RowCount<>	1
 begin
 	select	@sMessage=	'Ошибочно задана выгрузка',
@@ -96,10 +94,8 @@ select
 	,@sPrivateKey=	t.PrivateKey
 	,@sPath=	t.Path
 	,@iRetryAttempts=	t.RetryAttempts
-	,@sScriptGet=	a.Get
-	,@sScriptPut=	a.Put
 --		,@sExecType=	a.Type
-	,@gScript=	t.Script
+	,@iScript=	t.Script
 from
 	( select
 		Protocol=	Id
@@ -128,16 +124,16 @@ from
 		damit.FTPS )	t
 	,damit.Script	a
 where
-		t.Protocol=	@gProtocol
+		t.Protocol=	@iProtocol
 	and	a.Id=		t.Script
 ----------
-select	@sScriptCmd=	Put	from	damit.Script	where	Id=	@gScript
+select	@sScriptCmd=	Command	from	damit.Script	where	Id=	@iScript
 ----------
 declare	c	cursor	local	fast_forward	for
 	select
 		convert ( nvarchar ( 4000 ),	Value0 )
 	from
-		damit.GetVariables ( @gExecutionLog,	'FileName',	default,	default,	default,	default,	default,	default,	default,	default,	default )
+		damit.GetVariables ( @iExecutionLog,	'FileName',	default,	default,	default,	default,	default,	default,	default,	default,	default )
 	order	by
 		Sequence
 ----------

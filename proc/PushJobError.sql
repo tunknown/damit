@@ -8,10 +8,10 @@ alter	proc	damit.PushJobError
 as
 set	nocount		on
 ----------
-declare	@sMessage	damit.TMessage
-	,@iError	damit.TInteger
-	,@iRowCount	damit.TInteger
-	,@bDebug	damit.TBoolean
+declare	@sMessage	TMessage
+	,@iError	TInteger
+	,@iRowCount	TInteger
+	,@bDebug	TBoolean
 
 	,@iInstance	integer
 ----------

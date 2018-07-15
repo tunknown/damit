@@ -1,12 +1,12 @@
 use	damit
 ----------
-if	object_id ( 'damit.DoTransfer' , 'p' )	is	null
-	exec	( 'create	proc	damit.DoTransfer	as	select	ObjectNotCreated=	1/0' )
+if	object_id ( 'damit.Do' , 'p' )	is	null
+	exec	( 'create	proc	damit.Do	as	select	ObjectNotCreated=	1/0' )
 go
-alter	proc	damit.DoTransfer	-- выгрузка данных с сервера
-	@gExecutionLog		TGUID=		null	out	-- null=возвращается начальный damit.ExecutionLog.Id; not null=под него подцеплять ветку
-	,@gDistribution		TGUID			-- начальный для выполнения Task выгрузки, не обязательно с Node=null
-	,@sParameters		varchar ( max )=null	-- параметры выгрузки
+alter	proc	damit.Do	-- выгрузка данных с сервера
+	@iDistribution		TIdSmall				-- начальный для выполнения Task выгрузки, не обязательно с Node=null. Перечислен первым для опускания других параметров при упрощённом вызове
+	,@iExecutionLog		TId=			null	out	-- null=возвращается начальный damit.ExecutionLog.Id; not null=под него подцеплять ветку
+	,@sParameters		nvarchar ( max )=	null		-- параметры выгрузки
 as
 -- эту процедуру нельзя вызывать из транзакции, т.к. bcp не будет иметь доступа к свежевставленным данным до commit tran	
 declare	@sMessage		TMessage
@@ -22,25 +22,24 @@ declare	@sMessage		TMessage
 	,@bComplete		bit
 	,@bGoto			bit
 	,@sProcedureForTask	TSysName
-	,@gExecution		TGUID
-	,@gExecutionLog2	TGUID
+	,@iExecution		TId
 	,@iSequence		int
 
-	,@gTask			TGUID
-	,@gTaskNext		TGUID
+	,@iTask			TIdSmall
+	,@iTaskNext		TIdSmall
 
-	,@gDistributionNext	TGUID
+	,@iDistributionNext	TIdSmall
 
 	,@xParameters		xml
 ----------
 set	@iError=	0
 ----------
 select
-	@gTask=	Task
+	@iTask=	Task
 from
 	damit.Distribution
 where
-	Id=	@gDistribution
+	Id=	@iDistribution
 if	@@Error<>	0	or	@@RowCount<>	1
 begin
 	select	@sMessage=	'Ошибка',
@@ -48,17 +47,17 @@ begin
 	goto	error
 end
 ----------
-if	@gExecutionLog	is	null
+if	@iExecutionLog	is	null
 	set	@iSequence=	1
 else
 begin
 	select
-		@gExecution=	Execution
+		@iExecution=	Execution
 		,@iSequence=	max ( Sequence )+	1
 	from
 		damit.ExecutionLog					-- ***неплохо бы здесь наложить блокировку до insert damit.ExecutionLog ( Sequence )
 	where
-		Id=		@gExecutionLog
+		Id=		@iExecutionLog
 	group	by
 		Execution
 	if	@@Error<>	0	or	@@RowCount<>	1
@@ -68,7 +67,7 @@ begin
 		goto	error
 	end
 ----------
-	set	@gExecutionLog=	null	-- больше его значение не нужно
+	set	@iExecutionLog=	null	-- больше его значение не нужно
 end
 ----------
 select	@bFirstStep=	1
@@ -76,26 +75,26 @@ select	@bFirstStep=	1
 ----------
 while	@bComplete=	0
 begin
-	select	@gExecutionLog2=	newid()
-		,@gExecutionLog=	isnull ( @gExecutionLog,	@gExecutionLog2 )
-		,@gExecution=		isnull ( @gExecution,		@gExecutionLog2 )
-----------
-	insert
-		damit.ExecutionLog	( Id,	Distribution,	Start,	Finish,	ErrorCode,	Message,	Execution,	Sequence )
-	select
-		@gExecutionLog2							-- вставляем неполную информацию, чтобы внутри был доступ к @gDistribution
-		,@gDistribution
-		,getdate()
-		,null
-		,null
-		,null
-		,@gExecution
-		,@iSequence
+	insert	damit.ExecutionLog	( Execution,	Distribution,	Sequence )
+	values				( @iExecution,	@iDistribution,	@iSequence )	-- вставляем неполную информацию, чтобы внутри шага уже был доступ к @iDistribution
 	if	@@Error<>	0	or	@@RowCount<>	1
 	begin
 		select	@sMessage=	'Ошибка',
 			@iError=	-3
 		goto	error
+	end
+----------
+	set	@iExecutionLog=	scope_identity()
+----------
+	if	@iExecution	is	null
+	begin
+		update
+			damit.ExecutionLog
+		set
+			Execution=	@iExecutionLog
+			,@iExecution=	@iExecutionLog
+		where
+			Id=		@iExecutionLog
 	end
 ----------
 	if	@bFirstStep=	1	-- только на первый раз
@@ -105,10 +104,9 @@ begin
 			set	@xParameters=	@sParameters
 ----------
 			insert
-				damit.Variable	( Id,	ExecutionLog,	Alias,	Value,	Sequence )
+				damit.Variable	( ExecutionLog,	Alias,	Value,	Sequence )
 			select
-				newid()
-				,@gExecution
+				@iExecution
 				,Alias=		x.n.value ( 'local-name(.)',	'varchar ( 256 )' )	--,Element=	x.n.value ( 'local-name(..)',	'varchar ( 256 )' )
 				,Value=		x.n.value ( '.',		'varchar ( 8000 )' )
 				,Sequence=	x.n.value ( 'for $s in . return count(../../*[.<<$s])+1',	'integer' )		-- нумерация +1 получится только при соответствующем уровне вложенности
@@ -116,16 +114,16 @@ begin
 				@xParameters.nodes ( '//*/@*' )	x ( n )
 		end
 		else
-			insert
-				damit.Variable	( Id,	ExecutionLog,	Alias,	Value,	Sequence )
-			select
-				newid()
-				,@gExecution
-				,Alias=		'FilterList'
-				,convert ( varchar ( 8000 ) , Value )
-				,Sequence
-			from
-				damit.ToListFromStringAuto ( @sParameters )
+			if	@sParameters	is	not	null
+				insert
+					damit.Variable	( ExecutionLog,	Alias,	Value,	Sequence )
+				select
+					@iExecution
+					,Alias=		'FilterList'			-- ***убрать костыль
+					,convert ( varchar ( 8000 ) , Value )
+					,Sequence
+				from
+					damit.ToListFromStringAuto ( @sParameters )
 		if	@@Error<>	0
 		begin
 			select	@sMessage=	'Ошибка',
@@ -135,6 +133,9 @@ begin
 ----------
 		set	@bFirstStep=	0
 	end
+----------
+	select	@sProcedureForTask=	null	-- чтобы очистить переменные, если следующий запрос вернёт 0 записей
+		,@bGoto=		null
 ----------
 	select
 		@sProcedureForTask=	case
@@ -152,10 +153,10 @@ begin
 						else							0
 					end
 	from
-		damit.TaskEntity
+		damit.Task
 	where
-		Id=	@gTask
-	if	@@Error<>	0	or	@@RowCount<>	1
+		Id=	@iTask
+	if	@@Error<>	0	or	1<	@@RowCount
 	begin
 		select	@sMessage=	'Ошибка',
 			@iError=	-3
@@ -165,7 +166,7 @@ begin
 	if	@sProcedureForTask	is	not	null
 	begin
 		exec	@iSelector=	@sProcedureForTask
-						@gExecutionLog=	@gExecutionLog2
+						@iExecutionLog=	@iExecutionLog
 		if	@@Error<>	0	or	@iSelector<	0	-- *** а если нужно продолжать работать и не выдавать логическую(не физическую) ошибку???
 		begin
 			select	@sMessage=	'Ошибка',
@@ -182,7 +183,7 @@ begin
 		Finish=		getdate()
 		--,ErrorCode=	@iSelector или @iError				-- ***как потом использовать этот код?
 	where
-		Id=		@gExecutionLog2
+		Id=		@iExecutionLog
 	if	@@Error<>	0	or	@@RowCount<>	1
 	begin
 		select	@sMessage=	'Ошибка',
@@ -190,28 +191,28 @@ begin
 		goto	error
 	end
 ----------
-	select	@gTaskNext=		null
-		,@gDistributionNext=	null
+	select	@iTaskNext=		null
+		,@iDistributionNext=	null
 		,@iSequence=		@iSequence+	1
 ----------
-	if	@bGoto=		0
+	if	@bGoto=		1
 		select
-			@gDistributionNext=	Id
-			,@gTaskNext=		Task
+			@iDistributionNext=	Id
+			,@iTaskNext=		Task
 		from
 			damit.Distribution
 		where
-				Node=		@gDistribution
-			and	Sequence=	@iSelector			-- убрать? множественный переход только из шага Condition?
+				Id=		@iTask	/*Id*/
+			--and	Sequence=	@iSelector			-- множественный переход только из шага Condition?
 	else
 		select
-			@gDistributionNext=	Id
-			,@gTaskNext=		Task
+			@iDistributionNext=	Id
+			,@iTaskNext=		Task
 		from
 			damit.Distribution
 		where
-				Id=		@gTask	/*Id*/
-			--and	Sequence=	@iSelector			-- множественный переход только из шага Condition?
+				Node=		@iDistribution
+			and	Sequence=	isnull ( Sequence,	@iSelector )	-- убрать? множественный переход только из шага Condition?
 	select	@iRowCount=	@@RowCount
 		,@bComplete=	case	@iRowCount
 					when	0	then	1
@@ -224,35 +225,8 @@ begin
 		goto	error
 	end
 ----------
--- убрать после замены на полноценный механизм
-	if	exists	( select
-				1
-			from
-				damit.GetVariables ( @gExecution,	'KostylDlyaOstanovki',	default,	default,	default,	default,	default,	default,	default,	default,	default )
-			where
-				convert ( int , Value0 )=	1 )
-	begin
-		set	@gTask=	null
-----------
-		update
-			damit.ExecutionLog
-		set
-			Message=	'KostylDlyaOstanovki=1'
-		where
-			Id=		@gExecutionLog2
-		if	@@Error<>	0	or	@@RowCount<>	1
-		begin
-			select	@sMessage=	'Ошибка',
-				@iError=	-3
-			goto	error
-		end
-	end
--- ^^^убрать после замены на полноценный механизм
-
-
-
-	select	@gDistribution=	@gDistributionNext
-		,@gTask=	@gTaskNext
+	select	@iDistribution=	@iDistributionNext
+		,@iTask=	@iTaskNext
 end
 ----------
 goto	done
@@ -271,7 +245,7 @@ set
 	,ErrorCode=	@iError		-- пока ErrorCode=null выгрузка считается незавершённой и её результат нельзя учитывать в следующих запусках
 	,Message=	@sMessage
 where
-	Id=		@gExecutionLog2
+	Id=		@iExecutionLog
 --if	@@Error<>	0	or	@@RowCount<>	1
 --begin
 --	select	@sMessage=	'Ошибка изменения статуса выгрузки',

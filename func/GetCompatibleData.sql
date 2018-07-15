@@ -4,7 +4,7 @@ if	object_id ( 'damit.GetCompatibleData' , 'if' )	is	null
 	exec	( 'create	function	damit.GetCompatibleData()	returns	table	as	return	( select	Error=	1/0 )' )
 go
 alter	function	damit.GetCompatibleData	-- получение совместимых выгрузок, в т.ч. и зацикленных
-(	@gData	damit.TGUID	)
+(	@iData	TId	)
 returns	table
 as
 -- учитывать, что выгрузка может быть несовместима сама с собой, т.е. независима от любых предыдущих выгрузок
@@ -18,7 +18,7 @@ return	( with	cte	( Data,	Path,	IsProcessed,	IsClosed )	as
 		from
 			damit.DataData
 		where
-			Data2=		@gData
+			Data2=		@iData
 		union	all
 		select
 			dd.Data1
@@ -43,4 +43,4 @@ return	( with	cte	( Data,	Path,	IsProcessed,	IsClosed )	as
 	group	by
 		Data )
 go
-select	*	from	damit.GetCompatibleData	( 'D5C04A05-B3FC-4671-8F1A-0C1F30160852' )
+select	*	from	damit.GetCompatibleData	( null )

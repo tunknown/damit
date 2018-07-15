@@ -4,9 +4,9 @@ if	object_id ( 'damit.GetReplacement' , 'fn' )	is	null
 	exec	( 'create	function	damit.GetReplacement()	returns	int	as	begin	return	1	end' )
 go
 alter	function	damit.GetReplacement	-- заполнение переменной или параметра в контексте заданного выполнения
-(	@gExecutionLogId	TGUID
-	,@sAlias		TName=			null		--/задаётся только один из них- предустановленная переменная
-	,@sValue		nvarchar ( max )=	null	)	--\или произвольное значение
+(	@iExecutionLog	TId
+	,@sAlias	TName=			null		--/задаётся только один из них- предустановленная переменная
+	,@sValue	nvarchar ( max )=	null	)	--\или произвольное значение
 returns	nvarchar ( max )	-- ''=ошибка
 as
 begin
@@ -18,9 +18,9 @@ begin
 		set	@sResult=	@sValue
 	else
 		select
-			@sResult=	damit.GetFunctionResult ( Expression0,	Value0 )
+			@sResult=	damit.GetFunctionResult ( @iExecutionLog,	Expression0,	Value0 )
 		from
-			damit.GetVariables ( @gExecutionLogId,	@sAlias,	default,	default,	default,	default,	default,	default,	default,	default,	default )
+			damit.GetVariables ( @iExecutionLog,	@sAlias,	default,	default,	default,	default,	default,	default,	default,	default,	default )
 ----------
 	if	@sResult	like	'%(*%*)%'	-- '%(*%[^*()]%*)%' не годится, т.к. могут быть вложенные переменные
 	begin
@@ -28,7 +28,7 @@ begin
 					select	distinct					-- исключаем возможные множественные включения из-за мультзначений
 						Name
 					from
-						damit.GetVariablesList ( @gExecutionLogId )
+						damit.GetVariablesList ( @iExecutionLog )
 					order	by
 						Name
 ----------
@@ -47,10 +47,10 @@ begin
 ----------
 				if	@sResult	like	'%(*'+	@sAlias+	'*)%'
 					select
-						@sResult=	replace ( @sResult,	'(*'+	@sAlias+	'*)',	damit.GetFunctionResult ( Expression0,	Value0 ) )
+						@sResult=	replace ( @sResult,	'(*'+	@sAlias+	'*)',	damit.GetFunctionResult ( @iExecutionLog,	Expression0,	Value0 ) )
 						,@bIsProcessed=	1
 					from
-						damit.GetVariables ( @gExecutionLogId,	@sAlias,	default,	default,	default,	default,	default,	default,	default,	default,	default )
+						damit.GetVariables ( @iExecutionLog,	@sAlias,	default,	default,	default,	default,	default,	default,	default,	default,	default )
 			end
 ----------
 			close	@c

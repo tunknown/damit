@@ -4,7 +4,7 @@ if	object_id ( 'damit.SetupData' , 'p' )	is	null
 	exec	( 'create	proc	damit.SetupData	as	select	ObjectNotCreated=	1/0' )
 go
 alter	proc	damit.SetupData
-	@gId			TGUID=		null	output
+	@iId			TIdSmall=	null	output
 	,@sTarget		TSysName
 	,@sDataLog		TSysName=	null
 	,@sFilter		TSysName
@@ -86,7 +86,7 @@ select
 from
 	damit.Data
 where
-	Id=		@gId
+	Id=		@iId
 set	@iRowCount=	@@RowCount
 ----------
 select	@sRelationshipDelimeter=left ( @sRelationship,	1 )
@@ -104,7 +104,7 @@ if		@bCreateTableLog	is	null
 				from
 					damit.damit.ToListFromString ( @sRelationship,	@sRelationshipDelimeter,	1 )	t
 					full	join	damit.DataField	df	on
-						df.Data=		@gId
+						df.Data=		@iId
 					and	df.FieldName=		t.Value
 					and	df.IsRelationship=	1
 				where
@@ -182,10 +182,8 @@ if	@bAlien=	0	begin	tran	@sTransaction	else	save	tran	@sTransaction
 ----------
 if	@iRowCount=	0
 begin
-	set	@gId=	isnull ( @gId , newid() )
-----------
-	insert	damit.Data	( Id,	Target,		DataLog,	Filter,		Name,	Refiner,	CanCreated,	CanChanged,	CanRemoved,	CanFixed )
-	select			@gId,	@sTarget,	@sDataLog,	@sFilter,	@sName,	@sRefiner,	@bCanCreated,	@bCanChanged,	@bCanRemoved,	@bCanFixed
+	insert	damit.Data	( Target,	DataLog,	Filter,		Name,	Refiner,	CanCreated,	CanChanged,	CanRemoved,	CanFixed )
+	select			@sTarget,	@sDataLog,	@sFilter,	@sName,	@sRefiner,	@bCanCreated,	@bCanChanged,	@bCanRemoved,	@bCanFixed
 	if	@@Error<>	0
 	begin
 		select	@sMessage=	'Ошибка сохранения выгрузки',
@@ -193,20 +191,12 @@ begin
 		goto	error
 	end
 ----------
-	insert	damit.TaskEntity	( Id,	Data )
-	select				@gId,	@gId
-	if	@@Error<>	0
-	begin
-		select	@sMessage=	'Ошибка сохранения выгрузки',
-			@iError=	-3
-		goto	error
-	end
+	set	@iId=	@@identity
 ----------
 	insert
-		damit.DataField	( Id,	Data,	FieldName,	Value,	IsRelationship,	IsComparison,	IsResultset,	IsList,	IsDate,	Sort,	Sequence )
+		damit.DataField	( Data,	FieldName,	Value,	IsRelationship,	IsComparison,	IsResultset,	IsList,	IsDate,	Sort,	Sequence )
 	select
-		Id=		newid()
-		,Data=		@gId
+		Data=		@iId
 		,FieldName
 		,Value=		max ( t.Value )
 		,IsRelationship=max ( t.IsRelationship )
@@ -328,7 +318,7 @@ begin
 	end
 ----------
 	if	@bDebug=	1
-		select	*	from	damit.DataField	where	Data=	@gId	order	by	Sequence
+		select	*	from	damit.DataField	where	Data=	@iId	order	by	Sequence
 end
 else
 begin
@@ -345,7 +335,7 @@ begin
 		,CanRemoved=	@bCanRemoved
 		,CanFixed=	@bCanFixed
 	where
-		Id=		@gId
+		Id=		@iId
 end
 ----------
 if	@bCreateTableLog=	1
@@ -370,7 +360,7 @@ begin
 		from
 			damit.DataField
 		where
-				Data=		@gId
+				Data=		@iId
 			and	Value	is	not	null
 		order	by
 			Sequence
@@ -382,7 +372,7 @@ begin
 		from
 			damit.DataField
 		where
-				Data=		@gId
+				Data=		@iId
 			and	IsRelationship=	1
 ----------
 		if	@@RowCount<>	0
@@ -400,7 +390,7 @@ begin
 			@sExec=	'
 select
 	'+	case	@bTargetIsDataLog			-- *** поля нельзя брать через *, по крайней мере identity нужно исключать через convert к типу
-			when	0	then	'ExecutionLog=	convert ( uniqueidentifier , null )
+			when	0	then	'ExecutionLog=	convert ( bigint , null )
 	,IsCreated=	convert ( tinyint , null )
 	,IsChanged=	convert ( tinyint , null )
 	,IsRemoved=	convert ( tinyint , null )

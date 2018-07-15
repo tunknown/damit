@@ -4,14 +4,14 @@ if	object_id ( 'damit.DoScript' , 'p' )	is	null
 	exec	( 'create	proc	damit.DoScript	as	select	ObjectNotCreated=	1/0' )
 go
 alter	proc	damit.DoScript		-- выполнить произвольный скрипт с подачей в него парметров и с сохранением возвращЄнных из него изменЄнных параметров
-	@gExecutionLog		TGUID
+	@iExecutionLog		TId
 as
 declare	@sMessage		TMessage
 	,@iError		TInteger=	0
 	,@iRowCount		TInteger
 	,@bDebug		TBoolean=	1	-- 1=включить отладочные сообщени€
 
-	,@gData			TGUID
+	,@iData			TId
 	,@sLogTable		TSystemName
 	,@sFieldsSortQuoted	TSystemName=	''
 	,@bCanBlank		TBool
@@ -44,7 +44,7 @@ declare	@sMessage		TMessage
 	,@oValue8		sql_variant
 	,@oValue9		sql_variant
 
-	,@gScript		TGUID
+	,@iScript		TId
 
 	,@sFileName		nvarchar ( 256 )
 	,@sVariable		varchar ( 256 )
@@ -52,8 +52,8 @@ declare	@sMessage		TMessage
 
 
 	,@i			tinyint
-	,@gExecution		TGUID
-	,@gExecutionLogData	TGUID
+	,@iExecution		TId
+	,@iExecutionLogData	TId
 
 	,@bIsProcessed		TBool
 
@@ -63,8 +63,8 @@ declare	@sMessage		TMessage
 	,@sDelimeter		varchar ( 32 )=	'973B15234998415D876F29B2A6E068E4'
 ----------
 select
-	@gExecution=	dl.Execution
-	,@gScript=	f.Id
+	@iExecution=	dl.Execution
+	,@iScript=	f.Id
 	,@sSubsystem=	f.Subsystem
 	,@sExec=	f.Command
 	,@sFileName=	f.FileName
@@ -73,7 +73,7 @@ from
 	,damit.Distribution	d
 	,damit.Script		f
 where
-		dl.Id=		@gExecutionLog
+		dl.Id=		@iExecutionLog
 	and	d.Id=		dl.Distribution
 	and	f.Id=		d.Task
 if	@@error<>	0	or	@@rowcount<>	1
@@ -90,10 +90,10 @@ end
 
 ----------
 if	@sExec		like	'%(*%*)%'
-	set	@sExec=		damit.GetReplacement ( @gExecutionLog,	default,	@sExec )
+	set	@sExec=		damit.GetReplacement ( @iExecutionLog,	default,	@sExec )
 ----------
 if	@sFileName	like	'%(*%*)%'
-	set	@sFileName=	damit.GetReplacement ( @gExecutionLog,	default,	@sFileName )
+	set	@sFileName=	damit.GetReplacement ( @iExecutionLog,	default,	@sFileName )
 ----------
 if		isnull ( @sExec,	'' )=	''
 	or	isnull ( @sFileName,	'' )=	''
@@ -168,10 +168,9 @@ begin
 		set	@xParameters=	@sParameters
 ----------
 		insert
-			damit.Variable	( Id,	ExecutionLog,	Alias,	Value,	Sequence )
+			damit.Variable	( ExecutionLog,	Alias,	Value,	Sequence )
 		select
-			newid()
-			,@gExecutionLog
+			@iExecutionLog
 			,Alias=		x.n.value ( 'local-name(.)',	'varchar ( 256 )' )	--,Element=	x.n.value ( 'local-name(..)',	'varchar ( 256 )' )
 			,Value=		x.n.value ( '.',		'varchar ( 8000 )' )
 			,Sequence=	x.n.value ( 'for $s in . return count(../../*[.<<$s])+1',	'integer' )		-- нумераци€ +1 получитс€ только при соответствующем уровне вложенности
@@ -179,16 +178,16 @@ begin
 			@xParameters.nodes ( '//*/@*' )	x ( n )
 	end
 	else
-		insert
-			damit.Variable	( Id,	ExecutionLog,	Alias,	Value,	Sequence )
-		select
-			newid()
-			,@gExecutionLog
-			,Alias=		'FilterList'
-			,convert ( varchar ( 8000 ) , Value )
-			,Sequence
-		from
-			damit.ToListFromStringAuto ( @sParameters )
+		if	isnull ( @sParameters,	'' )<>	''
+			insert
+				damit.Variable	( ExecutionLog,	Alias,	Value,	Sequence )
+			select
+				@iExecutionLog
+				,Alias=		'FilterList'
+				,convert ( varchar ( 8000 ) , Value )
+				,Sequence
+			from
+				damit.ToListFromStringAuto ( @sParameters )
 	if	@@Error<>	0
 	begin
 		select	@sMessage=	'ќшибка',
@@ -276,10 +275,9 @@ begin
 		set	@xParameters=	@sParameters
 ----------
 		insert
-			damit.Variable	( Id,	ExecutionLog,	Alias,	Value,	Sequence )
+			damit.Variable	( ExecutionLog,	Alias,	Value,	Sequence )
 		select
-			newid()
-			,@gExecutionLog
+			@iExecutionLog
 			,Alias=		x.n.value ( 'local-name(.)',	'varchar ( 256 )' )	--,Element=	x.n.value ( 'local-name(..)',	'varchar ( 256 )' )
 			,Value=		x.n.value ( '.',		'varchar ( 8000 )' )
 			,Sequence=	x.n.value ( 'for $s in . return count(../../*[.<<$s])+1',	'integer' )		-- нумераци€ +1 получитс€ только при соответствующем уровне вложенности
@@ -287,16 +285,16 @@ begin
 			@xParameters.nodes ( '//*/@*' )	x ( n )
 	end
 	else
-		insert
-			damit.Variable	( Id,	ExecutionLog,	Alias,	Value,	Sequence )
-		select
-			newid()
-			,@gExecutionLog
-			,Alias=		'FilterList'
-			,convert ( varchar ( 8000 ) , Value )
-			,Sequence
-		from
-			damit.ToListFromStringAuto ( @sParameters )
+		if	isnull ( @sParameters,	'' )<>	''
+			insert
+				damit.Variable	( ExecutionLog,	Alias,	Value,	Sequence )
+			select
+				@iExecutionLog
+				,Alias=		'FilterList'
+				,convert ( varchar ( 8000 ) , Value )
+				,Sequence
+			from
+				damit.ToListFromStringAuto ( @sParameters )
 	if	@@Error<>	0
 	begin
 		select	@sMessage=	'ќшибка',
@@ -351,7 +349,7 @@ begin
 		,@sAlias9=	case	@i	when	9	then	Name	else	@sAlias9	end
 		,@i=		@i+	1
 	from
-		damit.GetVariablesList ( @gExecutionLog )
+		damit.GetVariablesList ( @iExecutionLog )
 	order	by						-- недокументированное особенности с пор€дком в order by могут сломатьс€
 		Name
 ----------
@@ -367,7 +365,7 @@ begin
 		,@oValue8=	Value8
 		,@oValue9=	Value9
 	from
-		damit.GetVariables ( @gExecutionLog,	@sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
+		damit.GetVariables ( @iExecutionLog,	@sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
 ----------
 	exec	@iError=	sp_executesql
 					/*@statement=	*/@sExec
@@ -410,7 +408,7 @@ begin
 		if	@@fetch_status<>	0	or	@sExec1	is	null	break
 ----------
 		exec	@iError=	damit.SetupVariable
-						@gExecutionLog=	@gExecutionLog
+						@iExecutionLog=	@iExecutionLog
 						,@sAlias=	@sExec1
 						,@oValue=	@oValue
 		if	@@Error<>	0	or	@iError<	0

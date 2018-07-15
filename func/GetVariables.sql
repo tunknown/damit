@@ -6,17 +6,17 @@ if	object_id ( 'damit.GetVariables' , 'tf' )	is	null
 	exec	( 'create	function	damit.GetVariables()	returns	@t	table	( i	int )	as	begin	return	end' )
 go
 alter	function	damit.GetVariables	-- получение значений переменных
-(	@gExecutionLog	uniqueidentifier
-	,@sAlias0	varchar ( 256 )=	null
-	,@sAlias1	varchar ( 256 )=	null
-	,@sAlias2	varchar ( 256 )=	null
-	,@sAlias3	varchar ( 256 )=	null
-	,@sAlias4	varchar ( 256 )=	null
-	,@sAlias5	varchar ( 256 )=	null
-	,@sAlias6	varchar ( 256 )=	null
-	,@sAlias7	varchar ( 256 )=	null
-	,@sAlias8	varchar ( 256 )=	null
-	,@sAlias9	varchar ( 256 )=	null )
+(	@iExecutionLog	TId
+	,@sAlias0	TName=		null
+	,@sAlias1	TName=		null
+	,@sAlias2	TName=		null
+	,@sAlias3	TName=		null
+	,@sAlias4	TName=		null
+	,@sAlias5	TName=		null
+	,@sAlias6	TName=		null
+	,@sAlias7	TName=		null
+	,@sAlias8	TName=		null
+	,@sAlias9	TName=		null )
 returns	@tResult	table
 (	Sequence	int			null
 	,Value0		sql_variant		null
@@ -51,26 +51,27 @@ returns	@tResult	table
 	,Variable9	uniqueidentifier	null )
 as
 begin
-	declare	@gDistributionStep	uniqueidentifier
-		,@gDistributionRoot	uniqueidentifier
-		,@gExecution		uniqueidentifier
+	declare	@iDistributionStep	TIdSmall
+		,@iDistributionRoot	TIdSmall
+		,@iExecution		TId
+		,@gNull			TGUID
 ----------
 	select
-		@gDistributionStep=	Distribution
-		,@gExecution=		Execution
+		@iDistributionStep=	Distribution
+		,@iExecution=		Execution
 	from
 		damit.ExecutionLog
 	where
-		Id=			@gExecutionLog
+		Id=			@iExecutionLog
 ----------
 	select
-		@gDistributionRoot=	Distribution
-	--	,@gExecution=		Execution
+		@iDistributionRoot=	Distribution
+	--	,@iExecution=		Execution
 	from
 		damit.ExecutionLog
 	where
-			Id=		@gExecution
-		and	Execution=	@gExecution
+			Id=		@iExecution
+		and	Execution=	@iExecution
 ----------
 
 
@@ -131,7 +132,7 @@ damit.Variable
 			and	pp.Alias=		'ForEach'		-- захадкоженный признак мультипеременной для цикла Condition
 			inner	join	damit.Distribution	d	on
 				d.Id=			pp.DistributionStep
-			inner	join	damit.TaskEntity		t	on
+			inner	join	damit.Task		t	on
 				t.Condition=		d.Task )
 	insert
 		@tTemp
@@ -154,14 +155,14 @@ damit.Variable
 				Alias
 				,Value
 				,Expression
-				,Variable=	null
+				,Variable=	@gNull
 				,Sequence
 				,Sequence2=	3					-- настройка параметра для шага шаблонной выгрузки, даже если он не используется как шаблон
 			from
 				damit.Parameter
 			where
 					DistributionRoot	is	null
-				and	DistributionStep=	@gDistributionStep
+				and	DistributionStep=	@iDistributionStep
 				and	Source		is	null			-- для шаблона нельзя отнаследовать настройки из неизвестного источника
 --				and	Alias		is	not	null
 				and	Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
@@ -170,14 +171,14 @@ damit.Variable
 				Alias
 				,Value
 				,Expression
-				,Variable=	null
+				,Variable=	@gNull
 				,Sequence
 				,Sequence2=	6					-- настройка параметра для шага выгрузки
 			from
 				damit.Parameter
 			where
-					DistributionRoot=	@gDistributionRoot
-				and	DistributionStep=	@gDistributionStep
+					DistributionRoot=	@iDistributionRoot
+				and	DistributionStep=	@iDistributionStep
 				and	Source		is	null
 --				and	Alias		is	not	null
 				and	Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
@@ -186,7 +187,7 @@ damit.Variable
 				p.Alias
 				,p.Value
 				,Expression=	isnull ( p.Expression,	c.Expression )
-				,Variable=	null
+				,Variable=	@gNull
 				,p.Sequence
 				,Sequence2=	1					-- передача из другого шага ссылки на параметр для шага шаблонной выгрузки, даже если он не используется как шаблон
 			from
@@ -194,7 +195,7 @@ damit.Variable
 				,damit.Parameter	p
 			where
 					c.DistributionRoot	is	null
-				and	c.DistributionStep=	@gDistributionStep
+				and	c.DistributionStep=	@iDistributionStep
 				and	p.Id=			c.Source
 				and	c.Alias		is	null
 --				and	p.Alias		is	not	null
@@ -204,7 +205,7 @@ damit.Variable
 				c.Alias
 				,p.Value
 				,Expression=	isnull ( p.Expression,	c.Expression )
-				,Variable=	null
+				,Variable=	@gNull
 				,p.Sequence
 				,Sequence2=	2					-- передача из другого шага значения параметра для шага шаблонной выгрузки, даже если он не используется как шаблон
 			from
@@ -212,7 +213,7 @@ damit.Variable
 				,damit.Parameter	p
 			where
 					c.DistributionRoot	is	null
-				and	c.DistributionStep=	@gDistributionStep
+				and	c.DistributionStep=	@iDistributionStep
 				and	p.Id=			c.Source
 --				and	c.Alias		is	not	null
 				and	c.Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
@@ -221,7 +222,7 @@ damit.Variable
 				p.Alias
 				,p.Value
 				,Expression=	isnull ( p.Expression,	c.Expression )
-				,Variable=	null
+				,Variable=	@gNull
 				,p.Sequence
 				,Sequence2=	4					-- передача из другого шага ссылки на параметр для шага выгрузки
 			from
@@ -237,13 +238,13 @@ damit.Variable
 							damit.ExecutionLog	el
 							,damit.Variable		v
 						where
-								el.Execution=	@gExecution
+								el.Execution=	@iExecution
 							and	v.ExecutionLog=	el.Id )	t	on
 					t.Distribution=		p.DistributionStep
 				and	t.Alias=		p.Alias
 			where
-					c.DistributionRoot=	@gDistributionRoot
-				and	c.DistributionStep=	@gDistributionStep
+					c.DistributionRoot=	@iDistributionRoot
+				and	c.DistributionStep=	@iDistributionStep
 				and	c.Alias			is	null
 				and	t.Distribution		is	null		-- отдавать значение параметра только если нет заполненного оверрайда в переменных
 			union	all
@@ -251,7 +252,7 @@ damit.Variable
 				c.Alias
 				,p.Value
 				,Expression=	isnull ( p.Expression,	c.Expression )
-				,Variable=	null
+				,Variable=	@gNull
 				,p.Sequence
 				,Sequence2=	5					-- передача из другого шага значения параметра для шага выгрузки
 			from
@@ -265,13 +266,13 @@ damit.Variable
 							damit.ExecutionLog	el		-- что делать при дублировании при join, если шаг выгрузки повторяется(например, из-за применения шаблона)?
 							,damit.Variable		v
 						where
-								el.Execution=	@gExecution
+								el.Execution=	@iExecution
 							and	v.ExecutionLog=	el.Id )	t	on
 					t.Distribution=		p.DistributionStep
 				and	t.Alias=		p.Alias
 			where
-					c.DistributionRoot=	@gDistributionRoot
-				and	c.DistributionStep=	@gDistributionStep
+					c.DistributionRoot=	@iDistributionRoot
+				and	c.DistributionStep=	@iDistributionStep
 --				and	c.Alias		is	not	null
 				and	c.Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
 				and	t.Distribution	is	null			-- отдавать значение параметра только если нет заполненного оверрайда в переменных
@@ -288,7 +289,7 @@ damit.Variable
 				left	join	cte	on
 					cte.Variable=	v.Id
 			where
-					v.ExecutionLog=	@gExecutionLog			-- бесполезно- только если передавать значение между частями одного шага?
+					v.ExecutionLog=	@iExecutionLog			-- бесполезно- только если передавать значение между частями одного шага?
 --				and	v.Alias	is	not	null			-- там уже not null, пишем только для соответствия другим запросам
 				and	v.Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
 
@@ -310,15 +311,15 @@ damit.Variable
 				and	p.Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
 				inner	join	damit.ExecutionLog	el	on
 					el.Distribution=	p.DistributionStep
-				and	el.Execution=		@gExecution
+				and	el.Execution=		@iExecution
 				inner	join	damit.Variable		v	on
 					v.ExecutionLog=		el.Id
 				and	v.Alias=		p.Alias
 				left	join	cte				on
 					cte.Variable=		v.Id
 			where
-					c.DistributionRoot=	@gDistributionRoot
-				and	c.DistributionStep=	@gDistributionStep
+					c.DistributionRoot=	@iDistributionRoot
+				and	c.DistributionStep=	@iDistributionStep
 				and	c.Alias		is	null
 
 				and	(	cte.Variable	is	null
@@ -337,15 +338,15 @@ damit.Variable
 					p.Id=			c.Source
 				inner	join	damit.ExecutionLog	el	on	-- что делать при дублировании при join, если шаг выгрузки повторяется(например, из-за применения шаблона)?
 					el.Distribution=	p.DistributionStep
-				and	el.Execution=		@gExecution
+				and	el.Execution=		@iExecution
 				inner	join	damit.Variable		v	on
 					v.ExecutionLog=		el.Id
 				and	v.Alias=		p.Alias
 				left	join	cte				on
 					cte.Variable=		v.Id
 			where
-					c.DistributionRoot=	@gDistributionRoot
-				and	c.DistributionStep=	@gDistributionStep
+					c.DistributionRoot=	@iDistributionRoot
+				and	c.DistributionStep=	@iDistributionStep
 --				and	c.Alias		is	not	null
 				and	c.Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
 
