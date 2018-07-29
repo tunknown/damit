@@ -47,10 +47,15 @@ begin
 ----------
 				if	@sResult	like	'%(*'+	@sAlias+	'*)%'
 					select
-						@sResult=	replace ( @sResult,	'(*'+	@sAlias+	'*)',	damit.GetFunctionResult ( @iExecutionLog,	Expression0,	Value0 ) )
+						@sResult=	replace ( @sResult,	'(*'+	@sAlias+	'*)',	case	isnull ( Sequence,	1 )
+																when	1	then	''
+																else			'(*'+	@sAlias+	'*)'	-- если нужно заменять параметр значениями нескольких записей, то нужно сохранить макрос до последней замены
+															end+	damit.GetFunctionResult ( @iExecutionLog,	Expression0,	Value0 ) )
 						,@bIsProcessed=	1
 					from
 						damit.GetVariables ( @iExecutionLog,	@sAlias,	default,	default,	default,	default,	default,	default,	default,	default,	default )
+					order	by
+						Sequence	desc
 			end
 ----------
 			close	@c
