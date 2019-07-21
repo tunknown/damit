@@ -5,13 +5,13 @@ if	object_id ( 'damit.GetParameterCustom' , 'fn' )	is	null
 go
 alter	function	damit.GetParameterCustom
 (	@iExecutionLog	TId
-	,@oValue	sql_variant	)
+	,@sValue	nvarchar ( max )	)
 returns	nvarchar ( max )
 as
 begin
 	declare	@sResult	nvarchar ( max )
 ----------
-	set	@sResult=	convert ( varchar ( 8000 ),	@oValue )
+	set	@sResult=	@sValue
 ----------
 	if	@sResult	like	'%(*1*)%'
 		set	@sResult=	replace ( @sResult,	'(*1*)',	convert ( varchar ( 256 ),	dateadd ( month,	-2,	getdate() ),	102 ) )

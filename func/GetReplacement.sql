@@ -5,22 +5,26 @@ if	object_id ( 'damit.GetReplacement' , 'fn' )	is	null
 go
 alter	function	damit.GetReplacement	-- заполнение переменной или параметра в контексте заданного выполнения
 (	@iExecutionLog	TId
-	,@sAlias	TName=			null		--/задаётся только один из них- предустановленная переменная
-	,@sValue	nvarchar ( max )=	null	)	--\или произвольное значение
+	,@sValue	nvarchar ( max )=	null	)	-- имя переменной или текст с макросами для подстановки
 returns	nvarchar ( max )	-- ''=ошибка
 as
 begin
 	declare	@bIsProcessed	TBool
 		,@sResult	nvarchar ( max )
 		,@c		cursor
+		,@sAlias	TName
 ----------
-	if	@sAlias	is	null
+	if	@sValue	like	'%(*%*)%'
 		set	@sResult=	@sValue
 	else
 		select
 			@sResult=	damit.GetFunctionResult ( @iExecutionLog,	Expression0,	Value0 )
 		from
-			damit.GetVariables ( @iExecutionLog,	@sAlias,	default,	default,	default,	default,	default,	default,	default,	default,	default )
+			( select
+				Expression0
+				,Value0=	convert ( nvarchar ( 4000 ),	Value0 )
+			from
+				damit.GetVariables ( @iExecutionLog,	@sValue,	default,	default,	default,	default,	default,	default,	default,	default,	default ) )	t
 ----------
 	if	@sResult	like	'%(*%*)%'	-- '%(*%[^*()]%*)%' не годится, т.к. могут быть вложенные переменные
 	begin
@@ -53,7 +57,12 @@ begin
 															end+	damit.GetFunctionResult ( @iExecutionLog,	Expression0,	Value0 ) )
 						,@bIsProcessed=	1
 					from
-						damit.GetVariables ( @iExecutionLog,	@sAlias,	default,	default,	default,	default,	default,	default,	default,	default,	default )
+						( select
+							Expression0
+							,Value0=	convert ( nvarchar ( 4000 ),	Value0 )
+							,Sequence
+						from
+							damit.GetVariables ( @iExecutionLog,	@sAlias,	default,	default,	default,	default,	default,	default,	default,	default,	default ) )	t
 					order	by
 						Sequence	desc
 			end
@@ -70,4 +79,4 @@ begin
 	return	@sResult
 end
 go
-select	damit.GetReplacement	(null,	null,	null)
+select	damit.GetReplacement	(null,	null)

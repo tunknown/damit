@@ -98,7 +98,7 @@ select
 from
 	damit.GetFormatFileName ( @sFileName , @dtMoment , @sFilterList )
 ----------
-set	@sExec=	convert ( nvarchar ( max ) , damit.GetReplacement ( @iExecutionLog,	default,	@sExec ) )
+set	@sExec=	convert ( nvarchar ( max ) , damit.GetReplacement ( @iExecutionLog,	@sExec ) )
 
 
 

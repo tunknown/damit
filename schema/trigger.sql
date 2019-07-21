@@ -11,7 +11,7 @@ declare	@dIdentity	numeric ( 38,	0 )
 ----------
 declare	@tIds	table
 (	Id	smallint	not null
-	/*,CC526421EF0D6244A5AF9E938300EB60	smallint	not null	identity ( 1,	1 )*/	)	-- что дешевле, inserd identity или row_number()?
+	/*,CC526421EF0D6244A5AF9E938300EB60	smallint	not null	identity ( 1,	1 )*/	)	-- что дешевле, insert identity или row_number()?
 ----------
 if	@@trancount=	0
 	begin	tran	CC526421EF0D6244A5AF9E938300EB60
@@ -73,7 +73,7 @@ where
 if	object_id ( 'tempdb..#CC526421EF0D6244A5AF9E938300EB60',	'u' )	is	not	null
 begin
 	insert
-		#CC526421EF0D6244A5AF9E938300EB60	( /*SPID,	*/ObjectName,	Value )		-- сохраняем все свежевставленные идентификаторы
+		#CC526421EF0D6244A5AF9E938300EB60	( /*SPID,	*/ObjectName,	Value )		-- сохраняем все свежевставленные идентификаторы для обработки снаружи множественных записей, если таблица существует
 	select
 		/*SPID=		@@SPID
 		,*/ObjectName=	'damit.Folder'
@@ -103,7 +103,7 @@ declare	@dIdentity	numeric ( 38,	0 )
 ----------
 declare	@tIds	table
 (	Id	smallint	not null
-	/*,CC526421EF0D6244A5AF9E938300EB60	smallint	not null	identity ( 1,	1 )*/	)	-- что дешевле, inserd identity или row_number()?
+	/*,CC526421EF0D6244A5AF9E938300EB60	smallint	not null	identity ( 1,	1 )*/	)	-- что дешевле, insert identity или row_number()?
 ----------
 if	@@trancount=	0
 	begin	tran	CC526421EF0D6244A5AF9E938300EB60

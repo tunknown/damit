@@ -109,7 +109,10 @@ begin
 				@iExecution
 				,Alias=		x.n.value ( 'local-name(.)',	'varchar ( 256 )' )	--,Element=	x.n.value ( 'local-name(..)',	'varchar ( 256 )' )
 				,Value=		x.n.value ( '.',		'varchar ( 8000 )' )
-				,Sequence=	x.n.value ( 'for $s in . return count(../../*[.<<$s])+1',	'integer' )		-- нумерация +1 получится только при соответствующем уровне вложенности
+				,Sequence=	case	x.n.value ( 'count(../../*)',	'integer' )
+							when	1	then	null			-- для damit.GetVariables, где null соответствует единичному параметру, а не набору нескольких записей
+							else			x.n.value ( 'for $s in . return count(../../*[.<<$s])+1',	'integer' )	-- убрать +1? нумерация +1 получится только при соответствующем уровне вложенности
+						end
 			from
 				@xParameters.nodes ( '//*/@*' )	x ( n )
 		end
@@ -212,7 +215,7 @@ begin
 			damit.Distribution
 		where
 				Node=		@iDistribution
-			and	Sequence=	isnull ( Sequence,	@iSelector )	-- убрать? множественный переход только из шага Condition?
+			and	Sequence=	isnull ( @iSelector,	Sequence )	-- убрать? множественный переход только из шага Condition?
 	select	@iRowCount=	@@RowCount
 		,@bComplete=	case	@iRowCount
 					when	0	then	1

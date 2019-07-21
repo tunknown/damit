@@ -12,7 +12,7 @@ declare	@bDebug		bit=	1
 	,@iRowCount	int
 	,@sMessage	varchar ( 256 )
 
-	,@sServer	varchar ( 256 )
+	,@sServer	varchar ( 256 )		--'http://192.168.x.x'
 	,@sPath		varchar ( 256 )		--'/ReportServer/Pages/ReportViewer.aspx?'
 	,@sReport	varchar ( 256 )
 	,@sRender	varchar ( 256 )		--'&rs:Command=Render&rs:Format=EXCEL'
@@ -68,3 +68,19 @@ done:
 return	@iError
 go
 use	tempdb
+
+
+
+/*
+параметр контрагент в отчёт
+
+damit.DoGetReport	html
+if	файл получен
+damit.DoSave	html
+damit.DoSendFTP		FileName
+
+damit.DoGetReport	excel
+if	файл получен
+damit.DoSave	excel
+damit.DoSendFTP		FileName
+*/

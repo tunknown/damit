@@ -32,6 +32,7 @@ alter	proc	damit.DoSendMailInternal
 	,@sBody		ntext=			null
 	,@bHTMLBody	bit=			0
 	,@sFileNames	nvarchar ( 4000 )=	null	-- список файлов-вложений, первый символ в качестве разделителя
+	,@bFilesDelete	bit=			0	-- файлы нужно удалить, они нужны только для отправки
 as
 --http://msdn.microsoft.com/library/default.asp?url=/library/en-us/cdosys/html/_cdosys_messaging.asp
 --http://msdn.microsoft.com/library/default.asp?url=/library/en-us/cdosys/html/_cdosys_schema_configuration_sendusing.asp
@@ -47,7 +48,7 @@ declare	@iError			int
 	,@iOLE			int
 	,@iProperty		int
 	,@sProperty		varchar ( 256 )
-	,@sFileNameSingle	varchar ( 255 )
+	,@sFileNameSingle	nvarchar ( 4000 )
 ----------
 exec	@iError=	sp_OACreate	'CDO.Message',	@iOLE	out
 if	@@Error<>0	or	@iError<>	0
@@ -95,41 +96,50 @@ begin
 	end
 end
 ----------
---exec	@iError=	sp_OASetProperty	@iOLE,	'Configuration.fields("http://schemas.microsoft.com/cdo/configuration/smtpauthenticate").Value',	1	-- cdoBasic не указывать, не работает
-----------
-exec	@iError=	sp_OASetProperty	@iOLE,	'Configuration.fields("http://schemas.microsoft.com/cdo/configuration/sendusername").Value',		@sUser
-if	@@Error<>0	or	@iError<>	0
+if	@sUser	is	not	null
 begin
-	select	@sMessage=	'Ошибка 6'
-		,@iError=	-1
-	goto	error
-end
-----------
-exec	@iError=	sp_OASetProperty	@iOLE,	'Configuration.fields("http://schemas.microsoft.com/cdo/configuration/sendpassword").Value',		@sPwd
-if	@@Error<>0	or	@iError<>	0
-begin
-	select	@sMessage=	'Ошибка 7'
-		,@iError=	-1
-	goto	error
-end
-----------
-exec	@iError=	sp_OASetProperty	@iOLE,	'Configuration.fields("http://schemas.microsoft.com/cdo/configuration/smtpaccountname").Value',		@sUser
-if	@@Error<>0	or	@iError<>	0
-begin
-	select	@sMessage=	'Ошибка 8'
-		,@iError=	-1
-	goto	error
-end
---   exec	@iError=	sp_OASetProperty	@iOLE,	'Configuration.fields("urn:schemas:mailheader:content-transfer-encoding").Value', "Base64"
-----------
-if	@iTimeout	is	not	null
-begin
-	exec	@iError=	sp_OASetProperty	@iOLE,	'Configuration.fields("http://schemas.microsoft.com/cdo/configuration/smtpconnectiontimeout").Value',	@iTimeout
+	exec	@iError=	sp_OASetProperty	@iOLE,	'Configuration.fields("http://schemas.microsoft.com/cdo/configuration/smtpauthenticate").Value',	'1'	-- cdoBasic
 	if	@@Error<>0	or	@iError<>	0
 	begin
-		select	@sMessage=	'Ошибка 8.1'
+		select	@sMessage=	'Ошибка 5'
 			,@iError=	-1
 		goto	error
+	end
+----------
+	exec	@iError=	sp_OASetProperty	@iOLE,	'Configuration.fields("http://schemas.microsoft.com/cdo/configuration/sendusername").Value',		@sUser
+	if	@@Error<>0	or	@iError<>	0
+	begin
+		select	@sMessage=	'Ошибка 6'
+			,@iError=	-1
+		goto	error
+	end
+----------
+	exec	@iError=	sp_OASetProperty	@iOLE,	'Configuration.fields("http://schemas.microsoft.com/cdo/configuration/sendpassword").Value',		@sPwd
+	if	@@Error<>0	or	@iError<>	0
+	begin
+		select	@sMessage=	'Ошибка 7'
+			,@iError=	-1
+		goto	error
+	end
+----------
+	exec	@iError=	sp_OASetProperty	@iOLE,	'Configuration.fields("http://schemas.microsoft.com/cdo/configuration/smtpaccountname").Value',		@sUser
+	if	@@Error<>0	or	@iError<>	0
+	begin
+		select	@sMessage=	'Ошибка 8'
+			,@iError=	-1
+		goto	error
+	end
+--	exec	@iError=	sp_OASetProperty	@iOLE,	'Configuration.fields("urn:schemas:mailheader:content-transfer-encoding").Value', "Base64"
+----------
+	if	@iTimeout	is	not	null
+	begin
+		exec	@iError=	sp_OASetProperty	@iOLE,	'Configuration.fields("http://schemas.microsoft.com/cdo/configuration/smtpconnectiontimeout").Value',	@iTimeout
+		if	@@Error<>0	or	@iError<>	0
+		begin
+			select	@sMessage=	'Ошибка 8.1'
+				,@iError=	-1
+			goto	error
+		end
 	end
 end
 ----------
@@ -263,7 +273,7 @@ begin
 	goto	error
 end
 ----------
-declare	c	cursor	local	fast_forward	for
+declare	cFiles	cursor	local	scroll	read_only	for
 	select
 		Value
 	from
@@ -271,11 +281,11 @@ declare	c	cursor	local	fast_forward	for
 	order	by
 		Sequence
 ----------
-open	c
+open	cFiles
 ----------
 while	1=	1
 begin
-	fetch	next	from	c	into	@sFileNameSingle
+	fetch	next	from	cFiles	into	@sFileNameSingle
 	if	@@fetch_status<>	0	break
 ----------
 	set	@iProperty=	null
@@ -297,8 +307,6 @@ begin
 	end
 end
 ----------
-deallocate	c
-----------
 exec	@iError=	sp_OAMethod	@iOLE,	'Send',	NULL
 if	@@Error<>0	or	@iError<>	0
 begin
@@ -306,6 +314,30 @@ begin
 		,@iError=	-1
 	goto	error
 end
+----------
+if		@bFilesDelete=				1
+	and	@@fetch_status=				-1
+	and	isnull ( @sFileNameSingle,	'' )<>	''
+	while	1=	1
+	begin
+		set	@sFileNameSingle=	'del /f /q '+	quotename ( @sFileNameSingle,	'"' )	-- кажется, не удалит скрытые или системные
+----------
+		if	@bDebug=	0
+			exec	@iError=	xp_cmdshell	@sFileNameSingle,	no_output
+		else
+			exec	@iError=	xp_cmdshell	@sFileNameSingle
+		if	@@Error<>0	or	@iError<>	0
+		begin
+			select	@sMessage=	'Ошибка удаления отправленного файла'
+				,@iError=	-1
+			goto	error
+		end
+----------
+		fetch	prior	from	cFiles	into	@sFileNameSingle
+		if	@@fetch_status<>	0	break
+	end
+----------
+deallocate	cFiles
 ----------
 goto	done
 

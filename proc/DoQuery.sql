@@ -12,13 +12,11 @@ declare	@sMessage		TMessage
 	,@bDebug		TBoolean=	1	-- 1=включить отладочные сообщения
 
 	,@sExec			TScript
-	,@sExec1		varchar ( max )=	''
-	,@sExec2		varchar ( max )=	''
+	,@sParamName		TsysName=		''
 
 	,@oValue		sql_variant
 
 	,@iExecution		TId
-	,@iExecutionLogData	TId
 
 	,@sQuery		TSystemName
 
@@ -31,15 +29,29 @@ declare	@sMessage		TMessage
 
 	,@iTargetObject		TInteger
 	,@sTargetType		varchar ( 2 )
-	,@sDeclareParams	TScript
-	,@sProcParams		TScript
-	,@sSaveParams		TScript
+
+	,@sParamsDeclare	TScript
+	,@sParamsProc		TScript
+	,@sParamsConvert	TScript
+	,@sParamsSave		TScript
+
 	,@bIsOutParam		bit
 	,@bIsDate		bit
 	,@oParamValue		sql_variant
-	,@sParamValue		varchar ( max )
-	,@sDataType		varchar ( 256 )
-	,@iSequence		tinyint
+	,@sDataType		varchar ( 128 )
+----------
+select
+	name
+	,colid
+	,isoutparam
+	,IsDate=	convert ( bit,			null )
+	,DataType=	convert ( varchar ( 128 ),	null )
+into
+	#syscolumns_Params		-- полагаем, что чаще вызывается без ошибок, чтобы рекомпиляция завершилась раньше
+from
+	syscolumns
+where
+	0=	1
 ----------
 select
 	@iExecution=	dl.Execution
@@ -79,19 +91,6 @@ begin
 end
 ----------
 select
-	name
-	,colid
-	,isoutparam
-	,IsDate=	convert ( bit,			null )
-	,DataType=	convert ( varchar ( 256 ),	null )
-into
-	#syscolumns_Params
-from
-	syscolumns
-where
-	0=	1
-----------
-select
 	@sExecAtServer=	SmartName
 	,@sExecShort=	'
 select
@@ -102,13 +101,13 @@ select
 				when	st.xtype	in	( 40 , 41 , 42 , 43 , 58 , 61 )	then	1
 				else									0
 			end
-	,DataType=	convert ( varchar ( 256 ),	case
+	,DataType=	convert ( varchar ( 128 ),	case
 								when		st.name	like	''%char''
 									or	st.name	like	''%binary''		then	st.name+	'' ( ''+	case	sc.prec
 																				when	-1	then	''max''
-																				else			convert ( varchar ( 256 ),	sc.prec )
+																				else			convert ( varchar ( 128 ),	sc.prec )
 																			end+	'' )''
-								when	st.name	in	( ''numeric'',	''decimal'' )	then	st.name+	'' ( ''+	convert ( varchar ( 256 ),	sc.prec )+	'',	''+	convert ( varchar ( 256 ),	sc.scale )+	'' )''
+								when	st.name	in	( ''numeric'',	''decimal'' )	then	st.name+	'' ( ''+	convert ( varchar ( 128 ),	sc.prec )+	'',	''+	convert ( varchar ( 128 ),	sc.scale )+	'' )''
 								else								st.name
 							end )
 from
@@ -134,19 +133,19 @@ end
 ----------
 if	0<	( select	count ( 1 )	from	#syscolumns_Params )
 begin
-	select	@sProcParams=		''
-		,@sDeclareParams=	''
-		,@sSaveParams=		''
+	select	@sParamsProc=		''
+		,@sParamsDeclare=	''
+		,@sParamsConvert=	''
+		,@sParamsSave=		''
 		,@sExec=		''
 ----------
-	declare	c	cursor	fast_forward	for
+	declare	c	cursor	local	fast_forward	for
 		select
 			name
 			,isoutparam
 			,IsDate
 			,DataType
-			,Sequence=	row_number()	over	( order	by	colid )
-		from
+		from				-- внести сюда damit.GetVariables и убрать курсор
 			#syscolumns_Params
 		order	by
 			colid
@@ -155,7 +154,7 @@ begin
 ----------
 	while	1=	1
 	begin
-		fetch	next	from	c	into	@sExec1,	@bIsOutParam,	@bIsDate,	@sDataType,	@iSequence
+		fetch	next	from	c	into	@sParamName,	@bIsOutParam,	@bIsDate,	@sDataType
 		if	@@fetch_status<>	0	break
 ----------
 		set	@oParamValue=	null
@@ -163,48 +162,63 @@ begin
 		select
 			@oParamValue=	Value0
 		from
-			damit.GetVariables ( @iExecutionLog,	@sExec1,	default,	default,	default,	default,	default,	default,	default,	default,	default )
+			damit.GetVariables ( @iExecutionLog,	@sParamName,	default,	default,	default,	default,	default,	default,	default,	default,	default )
 		if	1<	@@RowCount
 		begin
-			select	@sMessage=	'Найдено более одного значения для параметра '+	@sExec1+	' процедуры '+	@sTargetProc
+			select	@sMessage=	'Найдено более одного значения для параметра '+	@sParamName+	' процедуры '+	@sTargetProc
 				,@iError=	-3
 			goto	error
 		end
 ----------
-		select	@sParamValue=	convert ( varchar ( 8000 ),	@oParamValue )
-			,@sProcParams=		@sProcParams
+		select	@sParamsProc=		@sParamsProc
 					+	'
 		'
-					+	case	@iSequence
-							when	1	then	''
+					+	case	isnull ( @sParamsProc,	'' )
+							when	''	then	''
 							else			','
 						end
-					+	@sExec1
+					+	@sParamName
 					+	'=	'
-					+	case	@bIsOutParam
-							when	1	then	@sExec1+	'	output'
-							else			''
-						end
 					+	case
-							when	@bIsOutParam=	1		then	''
-							when	@sExec1	like	'%Execution%'	then	''''+	convert ( varchar ( 36 ),	@iExecutionLog )+	''''
-							when	@sParamValue	is	null	then	'null'									-- неизвестно, это значение или отсутствие значения; нельзя опускать передачу null, т.к. default может быть другой
-							when	@bIsDate=	1		then	''''+	convert ( varchar ( 23 ),	@oParamValue,	121 )+	''''
-							else						''''+	@sParamValue+	''''						-- считаем, что из текстового значения автосконвертируется в тип параметра
+							when	@bIsOutParam=	1			then	@sParamName+	'	output'
+							when	@sParamName	like	'%Execution%'	then	''''+	convert ( varchar ( 36 ),	@iExecutionLog )+	''''
+							when	@oParamValue	is	null		then	'null'									-- неизвестно, это значение или отсутствие значения; нельзя опускать передачу null, т.к. default параметра процедуры может быть другой
+							when	@bIsDate=	1			then	''''+	convert ( varchar ( 23 ),	@oParamValue,	121 )+	''''
+							else							''''+	convert ( varchar ( 8000 ),	@oParamValue )+		''''	-- считаем, что из текстового значения автосконвертируется в тип параметра
 						end
-			,@sDeclareParams=	@sDeclareParams
+			,@sParamsDeclare=	@sParamsDeclare
 					+	case	@bIsOutParam
-							when	1	then		case	@iSequence
-												when	1	then	'	'
-												else			'
+							when	1	then		case
+												when	isnull ( @sParamsDeclare,	'' )=	''	then	'
+----------
+declare	'
+												else								'
 	,'
 											end
-										+	@sExec1
-										+	'	'
-										+	@sDataType
+										+	@sParamName+	'	'+	@sDataType
+										+	case
+												when		@sDataType	like	'%(%max%)'
+													or	@sDataType	in	( 'image',	'text',	'ntext',	'xml' )	then	'
+	,@@'+	@sParamName+	'	varbinary ( max )'
+												else												''
+											end
 							else			''
 						end
-			,@sSaveParams=		@sSaveParams
+			,@sParamsConvert=	case
+							when		@bIsOutParam=	1
+								and	(	@sDataType	like	'%(%max%)'
+									or	@sDataType	in	( 'image',	'text',	'ntext',	'xml' ) )
+							then	case	isnull ( @sParamsConvert,	'' )
+									when	''	then	'
+----------
+select	'
+									else			'
+	,'
+								end
+							+	'@@'+	@sParamName+	'=	convert ( varbinary ( max ),	'+	@sParamName+	' )'	-- добавляем две @@ вместо одной, чтобы случайно не пересечься со @@spid
+							else	''
+						end
+			,@sParamsSave=		@sParamsSave
 					+	case	@bIsOutParam
 							when	1	then		'
 ----------
@@ -213,16 +227,15 @@ exec	damit.SetupVariable
 										+	convert ( varchar ( 36 ),	@iExecutionLog )
 										+	'''
 		,@sAlias=	'''
-										+	@sExec1
+										+	@sParamName
 										+	'''
 		,'
 										+	case
 												when		@sDataType	like	'%(%max%)'
-													or	@sDataType	in	( 'image',	'text',	'ntext',	'xml' )	then	'@mValue'
-												else												'@oValue'
+													or	@sDataType	in	( 'image',	'text',	'ntext',	'xml' )	then	'@mValue=	@@'
+												else												'@oValue=	'
 											end
-										+	'=	'
-										+	@sExec1+	'
+										+	@sParamName+	'
 '
 							else				''
 						end
@@ -231,19 +244,14 @@ exec	damit.SetupVariable
 	deallocate	c
 end
 ----------
-set	@sExec=		case	@sDeclareParams
-				when	''	then	''
-				else			'declare'
-		+	@sDeclareParams
+set	@sExec=		@sParamsDeclare
 		+	'
 ----------
-'
-			end
-		+	'exec	'
+exec	'
 		+	@sTargetProc
-		+	@sProcParams+	'
-'
-		+	@sSaveParams
+		+	@sParamsProc
+		+	@sParamsConvert
+		+	@sParamsSave
 ----------
 if	@bDebug=	1
 	print	( @sExec )
@@ -255,15 +263,6 @@ begin
 		@iError=	-3
 	goto	error
 end
-
-/*
-*** нужно разложить output параметры в damit.Variable
-
-select object_name(id),isoutparam,* from syscolumns
-where name like '@%'
-order by id,colid
-*/
-
 
 ----------
 goto	done

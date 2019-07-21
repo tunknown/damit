@@ -3,8 +3,27 @@ go
 if	db_id ( 'damit' )	is	not	null
 	drop	database	damit
 go
-create	database	damit
+----------
+CREATE	DATABASE
+	damit
+ON	PRIMARY
+(	NAME=		N'damit'
+	,FILENAME=	N'g:\MSSQL12.MSSQLSERVER\MSSQL\DATA\damit.mdf'
+	,SIZE=		5120KB
+	,FILEGROWTH=	10024KB )
+,FILEGROUP	Files	CONTAINS	FILESTREAM	DEFAULT
+(	NAME=		N'Files'
+	,FILENAME=	N'g:\MSSQL12.MSSQLSERVER\MSSQL\DATA\DMTFiles' )
+LOG	ON 
+(	NAME=		N'damit_log'
+	,FILENAME=	N'g:\MSSQL12.MSSQLSERVER\MSSQL\DATA\damit_log.ldf'
+	,SIZE=		1024KB
+	,FILEGROWTH=	10024KB )
+with	FILESTREAM
+(	NON_TRANSACTED_ACCESS=	FULL
+	,DIRECTORY_NAME=	N'DMTFiles' )
 go
+----------
 use	damit
 go
 begin	tran
@@ -122,10 +141,10 @@ create	table	damit.Script
 (	Id			damit.TIdSmall		not null
 	,Name			damit.TName		not null
 --	,Type			damit.TName		not null	-- cmd,sql
-	,Subsystem		nvarchar ( 40 )		not null	-- поддерживаем некоторые из msdb.dbo.syssubsystems, например- TSQL, ActiveScripting(для .vbs), CmdExec, SSIS
+	,Subsystem		nvarchar ( 40 )		null		-- null=сохранить файл не выполняя; поддерживаем некоторые из msdb.dbo.syssubsystems, например- TSQL, ActiveScripting(для .vbs), CmdExec, SSIS
 	,FileName		damit.TFileName		null		-- null=исполнять без сохранения или файл=сохранять перед исполнением, можно использовать для отладки
 	,Folder			damit.TFileName		null		-- с каким текущим каталогом исполнять, например, для упрощения вызова .exe
-	,Command		damit.TScript		not null	-- текст скрипта, возможно, с макросами; например, вызов .cmd файла(безотносительно содержимого FileName) с параметрами командной строки
+	,Command		damit.TScript		null		-- null=выполнить файл по имени; текст скрипта, возможно, с макросами; например, вызов .cmd файла(безотносительно содержимого FileName) с параметрами командной строки
 ,constraint	PKdamitScript		primary	key	clustered	( Id )
 ,constraint	CKdamitScript		check	(	FileName	is	not	null
 						or	Command		is	not	null ) )	-- выполнять то, что заполнено, если заполнены оба, то сохранить Command в FileName, выполнить, затем стереть FileName
@@ -348,10 +367,9 @@ create	table	damit.Condition		-- подходящие для sql WHERE условия
 ,constraint	PKdamitCondition	primary	key	clustered/*их мало*/	( Id )
 ,constraint	FKdamitCondition	foreign	key	( Parent )	references	damit.Condition	( Id )
 ,constraint	UQdamitCondition	unique	( Parent,	UQorNull )
-,constraint	CKdamitCondition1	check	(	Operator	in	( '=',	'<>',	'>',	'>=',	'<',	'<=',	'like',	'not like' )	and	FieldName	is	not	null	and	Value		is	not	null
-						or	Operator	in	( 'and',	'or' )							and	FieldName	is		null	and	Value		is		null )
-,constraint	CKdamitCondition2	check	(	Operator	in	( '=',	'and',	'or' )
-						or	Value	is	not	null ) )	-- =null->is null
+,constraint	CKdamitCondition1	check	(	Operator	in	( '>',	'>=',	'<',	'<=',	'like',	'not like' )	and	FieldName	is	not	null	and	Value	is	not	null
+						or	Operator	in	( '=',	'<>' )						and	FieldName	is	not	null	-- =(<>)null->is (not)null
+						or	Operator	in	( 'and','or' )						and	FieldName	is		null	and	Value	is		null ) )
 ----------
 create	table	damit.Layout	-- шаг создаёт списки полей для SELECT/FROM/WHERE/ORDER_BY запроса и сохраняет в параметр
 -- таблица подобна damit.Data, но без слежения и её результат- список полей в параметры, а не сам ResultSet в DataLog
@@ -456,7 +474,8 @@ create	table	damit.Parameter		-- разрешение использования переменных и параметро
 --условия изменения через damit.SetupVariable значения здесь вместо damit.Variable: Source=null,DistributionRoot<>null,Value<>null(первое значение сохранить вручную insert/update?)
 --автоматический список параметров Task собирать из sql кода для вставки в damit.Parameter?
 --заменить в Source FK(Parameter) на FK-Entity(Parameter,DistributionStep), чтобы в input можно было сослаться на одноименный output параметр DistributionStep отдельно не создавая его
-
+--DistributionRoot and DistributionStep is null=параметр для всех выгрузок
+--чем дальше параметр от текущего шага, тем меньше приоритет его значения
 /*
 список замен вместо dbo.Replacement+dbo.ReplacementValue :
 	damit.Variable
@@ -467,7 +486,7 @@ create	table	damit.Parameter		-- разрешение использования переменных и параметро
 (	Id			damit.TIdSmall		not null	identity ( 1,	1 )
 	,Source			damit.TIdSmall		null		-- FK(damit.Parameters.Id) должен принадлежать этой же выгрузке DistributionRoot, иначе результат непредсказуем; разворачиваем только на один уровень, без дальнейшей рекурсии; распространяется и на получение данных через damit.Variable. Ссылка на damit.Parameter.Id, а не DistributionStep, который может принадлежать шаблону и для которого обязательно указание DistributionRoot
 	,DistributionRoot	damit.TIdSmall		null		-- для возможности повторного использования шаблонов с другими параметрами для разных DistributionRoot, при null=для всех шаблонов; внутри DistributionRoot шаблон DistributionStep может быть использован только 1 раз
-	,DistributionStep	damit.TIdSmall		not null	-- для какого шага параметр
+	,DistributionStep	damit.TIdSmall		/*not */null	-- для какого шага параметр, null=параметр для всех шагов выгрузки
 --	,Condition		damit.TIdSmall		null		-- XML условия (или значения?) для параметра. Для join поля из damit.Data какого Distribution брать, если есть несколько Data внутри корневого Distribution?
 	,Alias			damit.TName		null		-- название параметра, null= получать из Source, если задан и Alias и Source, то Alias используется отсюда(для возможности переименования), а значение оттуда
 	,Value	sql_variant	/*damit.TBLOB*/		null		-- статическое значение параметра, при null нельзя понять, это заполненное значение или указание лукапить Source
@@ -483,14 +502,16 @@ create	table	damit.Parameter		-- разрешение использования переменных и параметро
 
 -- включить Expression в check
 
-,constraint	CKdamitParameter1			check	(	(	Source		is	not	null
-									or	Alias		is	not	null )
-								and	(	Source		is		null
-									or	Value		is		null )
-								and	(	Alias		is	not	null
-									or	Value		is		null )
-								and	(	Alias		is	not	null
-									or	Sequence	is		null )	)	)
+,constraint	CKdamitParameter1			check	(	(	Source			is	not	null
+									or	Alias			is	not	null )
+								and	(	Source			is		null
+									or	Value			is		null )
+								and	(	Alias			is	not	null
+									or	Value			is		null )
+								and	(	Alias			is	not	null
+									or	Sequence		is		null )
+								and	(	DistributionStep	is		null	and	Alias	is	not	null	-- глобальные параметры обязательно именованы
+									or	DistributionStep	is	not	null )	)	)
 /*,constraint	CKdamitParameterN			check	(	Condition	is		null	and	Alias	is	not	null
 								or	Condition	is	not	null	and	Alias	is		null )*/
 ----------
@@ -559,23 +580,23 @@ Format(FileName)	файл, для списка использовать Sequence
 --массив для цикла цикла-damit.Condition- одна или несколько damit.Variable.Value с одинаковым Alias и неповторяющимся Sequence is not null
 -- для Execution=root использовать Value как глобальную переменную?
 -- FILESTREAM чтобы заменить damit.DoSaveToXML с захардкоденной передачей параметра скрипта на damit.DoScript с универсальной передачей в damit.DoSave
-(	--Id			damit.TIdBig		not null	identity ( 1,	1 )	-- только для поддержки constraint
-	Id			damit.TGUID		not null	rowguidcol
+(	Id			damit.TGUID		not null	rowguidcol	constraint	DdamitVariableId	default	newid()
 	,ExecutionLog		damit.TId		/*not */null	-- область видимости переменной, null=например, для глобальных счётчиков
 	,Alias			damit.TName		not null	-- название переменной, через которую можно передавать значения между Task
 	,Value			sql_variant		null		-- содержимое, например, название таблицы/view с содержимым параметра- формат этого поля должны знать сами заинтересованные в параметре шаги
 	,Sequence		damit.TIntegerNeg	null		-- заполняется, если с одним названием несколько переменных; null=этот Alias должен упоминаться только один раз, т.е. не должен присутствовать с Sequence<>null
 	,Moment			damit.TDateTime		not null	constraint	DdamitVariableMoment	default	getdate()	-- момент появления переменной в выгрузке, только для кластерного ключа
-	,ValueBLOB	varbinary ( max ) /*FILESTREAM*/	null		-- для BLOB, например, файлов
+	,ValueBLOB		varbinary ( max )	FILESTREAM	null	-- для BLOB, например, файлов
 	,IsCurrent		damit.TBool		null		-- для выбора текущего значения 'ForEach' переменной из нескольких записей, если она относится к циклу
-	--,UQorNull		as	isnull ( convert ( binary ( 8 ),	nullif ( IsCurrent,	0 ) ),	convert ( binary ( 8 ),		Id ) )	persisted	not null	-- учитывать тип Id
 	,UQorNull		as	isnull ( convert ( binary ( 16 ),	nullif ( IsCurrent,	0 ) ),	convert ( binary ( 16 ),	Id ) )	persisted	not null	-- учитывать тип Id
+	--Id			damit.TIdBig		not null	identity ( 1,	1 )	-- только для поддержки constraint
+	--,UQorNull		as	isnull ( convert ( binary ( 8 ),	nullif ( IsCurrent,	0 ) ),	convert ( binary ( 8 ),		Id ) )	persisted	not null	-- учитывать тип Id
 --,constraint	PKdamitVariable			primary	key	clustered	( Id )
 ,constraint	PKdamitVariable			primary	key	nonclustered	( Id )
 ,constraint	FKdamitVariableExecutionLog	foreign	key	( ExecutionLog )	references	damit.ExecutionLog	( Id )
 ,constraint	UQdamitVariable			unique	( ExecutionLog,	Alias,	Sequence )
---,constraint	DFdamitVariable			default	getdate()	for	Moment	-- на 2008R2 синаксис не поддерживается
 ,constraint	UQdamitVariable1		unique	( ExecutionLog,	Alias,	UQorNull )	)
+--,constraint	DFdamitVariable			default	getdate()	for	Moment	-- на 2008R2 синаксис не поддерживается
 --,constraint	CKdamitVariable			check	( Value	is	null	or	ValueBLOB	is	not	null )	-- только через триггер?
 ----------
 CREATE	clustered	index	IXdamitVariable01	on	damit.Variable	( Moment )

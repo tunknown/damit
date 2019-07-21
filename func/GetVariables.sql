@@ -149,9 +149,60 @@ damit.Variable
 			,t.Expression
 			,t.Variable
 			,t.Sequence
-			,Sequence2=	row_number()	over	( partition	by	t.Alias,	t.Sequence	order	by	t.Sequence2	desc )
+			,Sequence2=	row_number()	over	( partition	by	t.Alias,	t.Sequence/*если параметр подан снаружи в damit.Do, то Sequence=1 вместо null*/	order	by	t.Sequence2	desc )
 		from
 			( select
+				Alias
+				,Value
+				,Expression
+				,Variable=	@gNull
+				,Sequence
+				,Sequence2=	-1					-- глобальный параметр
+			from
+				damit.Parameter
+			where
+					DistributionRoot	is	null
+				and	DistributionStep	is	null
+				and	Source		is	null			-- для глобального параметра нельзя отнаследовать настройки из неизвестного источника
+--				and	Alias		is	not	null
+				and	Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
+			union	all
+			select
+				p.Alias
+				,Value=		case
+							when	t.Distribution	is	null	then	p.Value
+							else						t.Value	-- в т.ч. Value=null
+						end
+				,p.Expression
+				,Variable=	t.Id
+				,Sequence=	case
+							when	t.Distribution	is	null	then	p.Sequence
+							else						t.Sequence
+						end
+				,Sequence2=	0					-- глобальный параметр всей выгрузки
+			from
+				damit.Parameter	p
+				left	join	( select
+							v.Id
+							,el.Distribution
+							,v.Alias
+							,v.Value
+							,v.Sequence
+						from
+							damit.ExecutionLog	el
+							,damit.Variable		v
+						where
+								el.Execution=	@iExecution
+							and	v.ExecutionLog=	el.Id )	t	on
+					t.Distribution=		p.DistributionRoot
+				and	t.Alias=		p.Alias
+				and	isnull ( t.Sequence,	0x7fffffff )=	isnull ( p.Sequence,	0x7fffffff )
+			where
+					p.DistributionRoot=	@iDistributionRoot
+				and	p.DistributionStep	is		null
+				and	p.Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
+			union	all
+			select
 				Alias
 				,Value
 				,Expression
@@ -282,19 +333,28 @@ damit.Variable
 				,v.Value
 				,Expression=	null
 				,Variable=	v.Id
-				,v.Sequence
+				,Sequence=	case	ExecutionLog
+							when	@iExecutionLog	then	isnull ( v.Sequence,	 0xFFFFFFFF )+	0xFFFFFFFF	-- повышаем приоритет значения переменной текущего шага
+							else				v.Sequence
+						end
 				,Sequence2=	9					-- значение переменной для шага выгрузки. если для переменной нет параметра, то её не наследуем по имени
 			from
 				damit.Variable	v
-				left	join	cte	on
+				left	join	cte			on
 					cte.Variable=	v.Id
+				left	join	damit.Parameter	p	on
+					p.DistributionRoot=	@iDistributionRoot
+				and	(	p.DistributionStep=	@iDistributionStep
+					or	p.DistributionStep	is	null )
+				and	p.Alias=		v.Alias
 			where
-					v.ExecutionLog=	@iExecutionLog			-- бесполезно- только если передавать значение между частями одного шага?
+					v.ExecutionLog	in	( @iExecutionLog,	@iExecution )
 --				and	v.Alias	is	not	null			-- там уже not null, пишем только для соответствия другим запросам
 				and	v.Alias		in	( @sAlias0,	@sAlias1,	@sAlias2,	@sAlias3,	@sAlias4,	@sAlias5,	@sAlias6,	@sAlias7,	@sAlias8,	@sAlias9 )
 
 				and	(	cte.Variable	is	null		--/это не мультпеременная для цикла Condition
 					or	v.IsCurrent=	1 )			--\или единичная запись из мультпеременной
+				and	p.DistributionRoot	is	null		-- исключаем переменные, получаемые через более приоритетные разделы
 			union	all
 			select
 				v.Alias

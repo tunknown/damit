@@ -6,18 +6,18 @@ go
 alter	function	damit.GetFunctionResult	-- выполнение функции по имени (в процедурном стиле)
 (	@iExecutionLog	TId
 	,@sFunction	nvarchar ( 1024 )	-- название функции на локальном сервере
-	,@oValue	sql_variant	)	-- параметр функции
+	,@sValue	nvarchar ( max ) )	-- параметр функции
 returns	nvarchar ( max )
 as
 begin
 	declare	@sResult	nvarchar ( max )
 ----------
 	if	@sFunction	is	null
-		set	@sResult=	convert ( varchar ( 8000 ),	@oValue )
+		set	@sResult=	@sValue
 	else
 		exec	@sResult=	@sFunction			-- вызываем функцию с первым параметром в процедурном стиле
 						@iExecutionLog		-- параметры в фиксированном порядке, а не по имени
-						,@oValue
+						,@sValue
 ----------
 	return	@sResult
 end

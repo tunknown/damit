@@ -61,7 +61,7 @@ as						-- return=0->условие НЕ выполняется, return=1->условие выполняется
 declare	@sMessage		TMessage
 	,@iError		TInteger
 	,@iRowCount		TInteger
-	,@bDebug		TBoolean=	0	-- 1=включить отладочные сообщения
+	,@bDebug		TBoolean=	1	-- 1=включить отладочные сообщения
 	,@sTransaction		TSysName
 	,@bAlien		TBoolean
 
@@ -109,45 +109,33 @@ select	top	( 1 )	-- неверно, но пока пришлось из-за возможных множественных запи
 from
 	damit.GetVariables	( @iExecutionLog,	'Begin',	'End',	'Step',	'Current',	'ForEach',	default,	default,	default,	default,	default )	t
 --where
---	t.Sequence=	1	-- параметр должен быть всего один, а не первый из нескольких
-if	@@Error<>	0	or	@@RowCount<>	1
+--	t.Sequence=	1					-- параметр должен быть всего один, а не первый из нескольких
+if	@@Error<>	0	or	1<	@@RowCount
 begin
 	select	@sMessage=	'Ошибочно заданы параметры для For',
 		@iError=	-3
 	goto	error
 end
 ----------
-if	@iEnd	is	not	null	-- это цикл по счётчику
+if	@iEnd	is	not	null				-- это цикл по счётчику
 begin
-	if	@iCurrent	is	null	-- первый вход в цикл
-	begin
-		exec	@iError=	damit.SetupVariable
-						@iExecutionLog=	@iExecutionLog
-						,@sAlias=	'Current'
-						,@oValue=	@iBegin
-						,@iSequence=	1	-- insert or update
-		if	@@Error<>	0	or	@iError<	0
-		begin
-			select	@sMessage=	'Ошибка инициализации цикла',
-				@iError=	-3
-			goto	error
-		end
-	end
+	if	@iCurrent	is	null
+		select	@iCurrent=	@iBegin			-- первый вход в цикл
+			,@sMessage=	'инициализации'
 	else
-	begin
-		set	@iCurrent=	@iCurrent+	@iStep
+		select	@iCurrent=	@iCurrent+	@iStep
+			,@sMessage=	'продолжения'
 ----------
-		exec	@iError=	damit.SetupVariable
-						@iExecutionLog=	@iExecutionLog
-						,@sAlias=	'Current'
-						,@oValue=	@iCurrent
-						,@iSequence=	1	-- insert or update
-		if	@@Error<>	0	or	@iError<	0
-		begin
-			select	@sMessage=	'Ошибка инициализации цикла',
-				@iError=	-3
-			goto	error
-		end
+	exec	@iError=	damit.SetupVariable
+					@iExecutionLog=	@iExecutionLog
+					,@sAlias=	'Current'
+					,@oValue=	@iCurrent
+					,@iSequence=	1	-- insert or update
+	if	@@Error<>	0	or	@iError<	0
+	begin
+		select	@sMessage=	'Ошибка '+	isnull ( @sMessage,	'' )+	' цикла',
+			@iError=	-3
+		goto	error
 	end
 end
 ----------
@@ -247,7 +235,7 @@ end
 		,Value=		null
 		,Stack=		convert ( varchar ( 8000 ),	'' )
 		,Sequence2=	0x7FFF
-		,SequenceBin=	convert ( varbinary ( 8000 ),	0x7FFF )
+		,SequenceBin=	convert ( varbinary ( 8000 ),	0x7FFF )	-- принудительная запись для последней закрывающей скобки
 	from
 		damit.Condition
 	where
@@ -270,6 +258,28 @@ end
 		,cte0		p
 	where
 		c.Parent=	p.Id )
+,	cte1	as
+(	select
+		Parent
+		,FieldName
+		,Operator
+		,Value
+		,Stack
+		,Sequence2
+		,SequenceBin
+
+		,basetype=	case
+					when	Value	is	null	then	'varbinary'
+					else					convert ( sysname,		SQL_VARIANT_PROPERTY ( Value,	'basetype' ) )
+				end
+		,Precision=	convert ( varchar ( 2 ),	SQL_VARIANT_PROPERTY ( Value,	'Precision' ) )
+		,Scale=		convert ( varchar ( 2 ),	SQL_VARIANT_PROPERTY ( Value,	'Scale' ) )
+		,MaxLength=	case
+					when	Value	is	null	then	-1
+					else					SQL_VARIANT_PROPERTY ( Value,	'MaxLength' )
+				end
+	from
+		cte0 )
 ,	cte	as
 (	select
 		Parent
@@ -288,15 +298,14 @@ end
 							order		by
 								SequenceBin )
 		,DataType=	convert ( varchar ( 256 ),	case
-									when	convert ( sysname,	SQL_VARIANT_PROPERTY ( Value,	'basetype' ) )	like	'%binary'			then	convert ( varchar ( 256 ),	SQL_VARIANT_PROPERTY ( Value,	'basetype' ) )+	'('+	convert ( varchar ( 4 ),	convert ( smallint,	SQL_VARIANT_PROPERTY ( Value,	'MaxLength' ) ) )+	')'
-									when	convert ( sysname,	SQL_VARIANT_PROPERTY ( Value,	'basetype' ) )	like	'n%char'			then	convert ( varchar ( 256 ),	SQL_VARIANT_PROPERTY ( Value,	'basetype' ) )+	'('+	convert ( varchar ( 4 ),	convert ( smallint,	SQL_VARIANT_PROPERTY ( Value,	'MaxLength' ) )/	2 )+	')'
-									-- %char строго позже n%char
-									when	convert ( sysname,	SQL_VARIANT_PROPERTY ( Value,	'basetype' ) )	like	'%char'				then	convert ( varchar ( 256 ),	SQL_VARIANT_PROPERTY ( Value,	'basetype' ) )+	'('+	convert ( varchar ( 4 ),	convert ( smallint,	SQL_VARIANT_PROPERTY ( Value,	'MaxLength' ) ) )+	')'
-									when	convert ( sysname,	SQL_VARIANT_PROPERTY ( Value,	'basetype' ) )	in	( 'decimal',	'numeric' )	then	convert ( varchar ( 256 ),	SQL_VARIANT_PROPERTY ( Value,	'basetype' ) )+	'('+	convert ( varchar ( 2 ),	convert ( tinyint,	SQL_VARIANT_PROPERTY ( Value,	'Precision' ) ) )+	','+	convert ( varchar ( 2 ),	convert ( tinyint,	SQL_VARIANT_PROPERTY ( Value,	'Scale' ) ) )+	')'
-									else																convert ( varchar ( 256 ),	SQL_VARIANT_PROPERTY ( Value,	'basetype' ) )
+									when	basetype	like	'%binary'				then	basetype+	'('+	case	MaxLength	when	-1	then	'max'	else	convert ( varchar ( 4 ),	MaxLength )	end+	')'
+									when	basetype	like	'n%char'				then	basetype+	'('+	convert ( varchar ( 4 ),	convert ( smallint,	MaxLength )/	2 )+	')'
+									when	basetype	like	'%char'/*%char строго позже n%char*/	then	basetype+	'('+	convert ( varchar ( 4 ),	MaxLength )+					')'
+									when	basetype	in	( 'decimal',	'numeric' )		then	basetype+	'('+	Precision+	','+	Scale+							')'
+									else										basetype
 								end )
 	from
-		cte0 )
+		cte1 )
 --select	*	from	cte	order	by	SequenceAll
 select	@sExec=	'
 select
@@ -304,7 +313,10 @@ select
 from
 	damit.GetVariables ( @iExecutionLog'
 	+	( select	distinct			-- distinct для повторяющихся полей в условии
-			[data()]=	',	/*'+	convert ( varchar ( 1 ),	cur.SequenceField-	1 )+	'*/'''+	cur.FieldName+	''''
+			[data()]=	',	/*'
+				+	convert ( varchar ( 1 ),	cur.SequenceField-	1 )
+				+	'*/'''
+				+	cur.FieldName+	''''
 		from
 			cte	cur
 			,cte	next
@@ -313,38 +325,62 @@ from
 		order	by
 			1--cur.SequenceField
 		for
-			xml	path ( '' ) )
-	+	replicate ( ',	default',	10-	( select	max ( SequenceField )	from	cte	where	FieldName	is	not	null ) )
+			xml	path ( '' ),	TYPE ).value ( '.',	'nvarchar(max)' )
+	+	replicate ( ',	default',	10-	( select	max ( SequenceField )	from	cte	where	FieldName	is	not	null ) )	-- у damit.GetVariables не более 10 параметров переменных
 	+' )	t
 where
 	'+	( select
 			[data()]=	case
-						when		cur.FieldName	is	null
+						when		cur.FieldName	is		null
 							and	3<	len ( cur.Stack )		then	rtrim ( left ( right ( cur.Stack,	6 ),	3 ) )
 						else								''
 					end
 				+	case
-						when		cur.FieldName	is	null
-							or	cur.SequenceAll=	1		then	'('	-- первая закрывающая скобка условия ставится всегда
+						when		cur.FieldName	is		null
+							or	cur.SequenceAll=	1		then	'('	-- первая открывающая скобка условия ставится всегда
 						else								''
 					end
 				+	case
-						when		1<	cur.Sequence2
-							and	cur.FieldName	is	not	null	then	rtrim ( right ( cur.Stack,	3 ) )
+						when		cur.FieldName	is	not	null
+							and	1<	cur.Sequence2			then	rtrim ( right ( cur.Stack,	3 ) )
 						else								''
 					end
 				+	case
-						when	cur.FieldName		is	null		then	''
-						else								' convert ( '+	cur.DataType+	',	t.Value'+	convert ( varchar ( 2 ),	cur.SequenceField-	1 )+	' )'
+						when		cur.FieldName	is		null	then	''
+						else								' (/*1*/convert ( '+	cur.DataType+	',	t.Value'+	convert ( varchar ( 1 ),	cur.SequenceField-	1 )+	' )'
 					end
 				+	case
-						when	cur.FieldName	is	not	null		then	cur.Operator+	isnull ( convert ( nvarchar ( 4000 ),	cur.Value ),	'null' )	-- =null -> is null при других операторах ошибка
+						when		cur.FieldName	is	not	null	then	case
+															when	cur.Value	is	null	then	'	is	'
+																				+	case	cur.Operator
+																						when	'='	then	''
+																						when	'<>'	then	'not'
+																						else			null	-- ошибка заполнения dbo.Condition?
+																					end
+																				+	'	null	'
+																				+	case	cur.Operator
+																						when	'='	then	'and'
+																						when	'<>'	then	'or'
+																						else			null	-- ошибка заполнения dbo.Condition?
+																					end
+																				+	'	damit.GetVariableBLOB ( @iExecutionLog,	t.Variable'
+																				+	convert ( varchar ( 1 ),	cur.SequenceField-	1 )
+																				+	' )	is	'
+																				+	case	cur.Operator
+																						when	'='	then	''
+																						when	'<>'	then	'not'
+																						else			null	-- ошибка заполнения dbo.Condition?
+																					end
+																				+	'	null'	-- если тип данных не переводится в varchar(8000), то можем проверить на null
+															else						cur.Operator+	convert ( nvarchar ( 4000 ),	cur.Value )
+														end
+													+	'/*1*/)'
 						else								''
 					end
 				+	case
-						when		(	cur.Parent<>	next.Parent
-								or	next.Parent	is	null )
-							and	cur.FieldName	is	not	null	then	')'	-- последняя закрывающая скобка условия ставится всегда
+						when		cur.FieldName	is	not	null
+							and	(	cur.Parent<>	next.Parent
+								or	next.Parent	is	null )	then	')'	-- последняя закрывающая скобка условия ставится всегда
 						else								''
 					end
 		from
@@ -355,28 +391,19 @@ where
 		order	by
 			cur.SequenceAll
 		for
-			xml	path ( '' ) )	-- после xml нужно восстановить Predefined entities in XML
+			xml	path ( '' ),	TYPE ).value ( '.',	'nvarchar(max)' )
 ----------
-set	@sExec=	replace (
-		replace (
-		replace (
-		replace (
-		replace (
-		@sExec
-		,'&amp;',	'&' )
-		,'&apos;',	'''' )
-		,'&quot;',	'"' )
-		,'&lt;',	'<' )
-		,'&gt;',	'>' )
+if	@bDebug=	1
+	print	@sExec
 ----------
-exec	sp_executesql
-		@statement=	@sExec
-		,@params=	N'@iExecutionLog	bigint,	@iRowCount	int	out'
-		,@iExecutionLog=@iExecutionLog
-		,@iRowCount=	@iRowCount	out
-if	@@Error<>	0	--or	@@RowCount=	0
+exec	@iError=	sp_executesql
+				@statement=	@sExec
+				,@params=	N'@iExecutionLog	bigint,	@iRowCount	int	out'
+				,@iExecutionLog=@iExecutionLog
+				,@iRowCount=	@iRowCount	out
+if	@@Error<>	0	or	@iError<>	0
 begin
-	select	@sMessage=	'Не удалось проверить фильтрацию',
+	select	@sMessage=	'Ошибка проверки условия, например, неверный фильтр',
 		@iError=	-3
 	goto	error
 end

@@ -120,7 +120,8 @@ begin
 	where
 			ExecutionLog=	@iExecutionLog
 		and	Alias=		@sAlias
-		and	Sequence=	@iSequence
+		and	(	Sequence=	@iSequence
+			or	isnull ( Sequence,	@iSequence )	is	null )
 	select	@iError=	@@Error
 		,@iRowCount=	@@RowCount
 	if	@iError<>	0	or	@iRowCount>	1
